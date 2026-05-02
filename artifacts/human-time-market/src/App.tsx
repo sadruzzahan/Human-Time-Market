@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth } from "@clerk/react";
+import { useGetMyProfile, getGetMyProfileQueryKey } from "@workspace/api-client-react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
@@ -129,24 +130,63 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+function useOnboardingStatus() {
+  const { isSignedIn, isLoaded } = useAuth();
+  const query = useGetMyProfile({
+    query: {
+      enabled: isLoaded && !!isSignedIn,
+      queryKey: getGetMyProfileQueryKey(),
+      retry: false,
+    },
+  });
+  return {
+    isSignedIn: !!isSignedIn,
+    isAuthLoaded: isLoaded,
+    isProfileLoaded: !query.isLoading,
+    isOnboarded: query.data?.isOnboarded === true,
+    profileMissing:
+      !query.isLoading &&
+      !query.data &&
+      !!query.error,
+  };
+}
+
 function HomeRedirect() {
-  return (
-    <>
-      <Show when="signed-in">
-        <Redirect to="/marketplace" />
-      </Show>
-      <Show when="signed-out">
-        <Home />
-      </Show>
-    </>
-  );
+  const { isSignedIn, isAuthLoaded, isProfileLoaded, isOnboarded } = useOnboardingStatus();
+  if (!isAuthLoaded) return null;
+  if (!isSignedIn) return <Home />;
+  if (!isProfileLoaded) return null;
+  return <Redirect to={isOnboarded ? "/marketplace" : "/onboarding"} />;
+}
+
+function SignedInGate({ component: Component, allowUnonboarded = false }: { component: React.ComponentType; allowUnonboarded?: boolean }) {
+  const { isSignedIn, isAuthLoaded, isProfileLoaded, isOnboarded } = useOnboardingStatus();
+  if (!isAuthLoaded) return null;
+  if (!isSignedIn) return <Redirect to="/" />;
+  if (!isProfileLoaded) return null;
+  if (!allowUnonboarded && !isOnboarded) return <Redirect to="/onboarding" />;
+  if (allowUnonboarded && isOnboarded) return <Redirect to="/marketplace" />;
+  return <Component />;
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   return (
     <>
       <Show when="signed-in">
-        <Component />
+        <SignedInGate component={Component} />
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/" />
+      </Show>
+    </>
+  );
+}
+
+function OnboardingRoute() {
+  return (
+    <>
+      <Show when="signed-in">
+        <SignedInGate component={Onboarding} allowUnonboarded />
       </Show>
       <Show when="signed-out">
         <Redirect to="/" />
@@ -192,9 +232,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/price-index" component={PriceIndex} />
           <Route path="/profile/:userId" component={ProfileUser} />
           
-          <Route path="/onboarding">
-            <ProtectedRoute component={Onboarding} />
-          </Route>
+          <Route path="/onboarding" component={OnboardingRoute} />
           <Route path="/dashboard">
             <ProtectedRoute component={Dashboard} />
           </Route>
