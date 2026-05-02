@@ -3,20 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Human Time Market API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User and profile operations
+  - name: skill-categories
+    description: Skill category taxonomy
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +27,142 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users/me:
+    get:
+      operationId: getMyProfile
+      tags: [users]
+      summary: Get the current user's profile
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: upsertMyProfile
+      tags: [users]
+      summary: Create or update the current user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertProfileBody"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /users/{userId}:
+    get:
+      operationId: getPublicProfile
+      tags: [users]
+      summary: Get a public professional profile
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicProfile"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/me/skills:
+    get:
+      operationId: getMySkills
+      tags: [users]
+      summary: Get the current user's selected skills
+      responses:
+        "200":
+          description: List of skill category IDs for this user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserSkill"
+    put:
+      operationId: updateMySkills
+      tags: [users]
+      summary: Replace the current user's skills
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSkillsBody"
+      responses:
+        "200":
+          description: Updated skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserSkill"
+
+  /skill-categories:
+    get:
+      operationId: listSkillCategories
+      tags: [skill-categories]
+      summary: List all skill categories (hierarchical)
+      responses:
+        "200":
+          description: List of skill categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SkillCategory"
+
+  /skill-categories/{id}:
+    get:
+      operationId: getSkillCategory
+      tags: [skill-categories]
+      summary: Get a single skill category with its children
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Skill category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkillCategory"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +173,153 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    ExperienceLevel:
+      type: string
+      enum: [junior, mid, senior, principal, expert]
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        clerkId:
+          type: string
+        displayName:
+          type: string
+        bio:
+          type: ["string", "null"]
+        timezone:
+          type: ["string", "null"]
+        experienceLevel:
+          $ref: "#/components/schemas/ExperienceLevel"
+        hourlyRateBaselineCents:
+          type: ["integer", "null"]
+        isOnboarded:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - clerkId
+        - displayName
+        - experienceLevel
+        - isOnboarded
+        - createdAt
+        - updatedAt
+
+    PublicProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        clerkId:
+          type: string
+        displayName:
+          type: string
+        bio:
+          type: ["string", "null"]
+        timezone:
+          type: ["string", "null"]
+        experienceLevel:
+          $ref: "#/components/schemas/ExperienceLevel"
+        hourlyRateBaselineCents:
+          type: ["integer", "null"]
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkillCategory"
+      required:
+        - id
+        - clerkId
+        - displayName
+        - experienceLevel
+        - skills
+
+    UpsertProfileBody:
+      type: object
+      properties:
+        displayName:
+          type: string
+        bio:
+          type: ["string", "null"]
+        timezone:
+          type: ["string", "null"]
+        experienceLevel:
+          $ref: "#/components/schemas/ExperienceLevel"
+        hourlyRateBaselineCents:
+          type: ["integer", "null"]
+      required:
+        - displayName
+        - experienceLevel
+
+    UpdateSkillsBody:
+      type: object
+      properties:
+        skillCategoryIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - skillCategoryIds
+
+    UserSkill:
+      type: object
+      properties:
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        parentName:
+          type: ["string", "null"]
+      required:
+        - skillCategoryId
+        - skillCategoryName
+
+    SkillCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkillCategoryChild"
+      required:
+        - id
+        - name
+        - slug
+        - children
+
+    SkillCategoryChild:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+      required:
+        - id
+        - name
+        - slug
