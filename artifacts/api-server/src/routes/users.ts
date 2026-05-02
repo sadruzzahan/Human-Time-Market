@@ -266,9 +266,10 @@ router.put("/users/me/skills", requireAuth, async (req, res) => {
       return;
     }
     await db.delete(professionalSkills).where(eq(professionalSkills.userId, user.id));
-    if (parsed.data.skillCategoryIds.length > 0) {
+    const uniqueIds = Array.from(new Set(parsed.data.skillCategoryIds));
+    if (uniqueIds.length > 0) {
       await db.insert(professionalSkills).values(
-        parsed.data.skillCategoryIds.map((id) => ({
+        uniqueIds.map((id) => ({
           userId: user.id,
           skillCategoryId: id,
         })),
