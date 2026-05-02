@@ -1,9 +1,12 @@
 import { getAuth } from "@clerk/express";
 import type { Request, Response, NextFunction } from "express";
 
-declare module "express-serve-static-core" {
-  interface Request {
-    clerkUserId?: string;
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      clerkUserId?: string;
+    }
   }
 }
 

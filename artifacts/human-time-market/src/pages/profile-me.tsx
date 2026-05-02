@@ -9,7 +9,8 @@ import {
   useUpdateMySkills,
   useListSkillCategories,
   getGetMyProfileQueryKey,
-  getGetMySkillsQueryKey
+  getGetMySkillsQueryKey,
+  type UserProfile,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -105,8 +106,9 @@ export default function ProfileMe() {
       await upsertProfile.mutateAsync({
         data: values
       });
-      queryClient.setQueryData(getGetMyProfileQueryKey(), (old: any) => 
-        old ? { ...old, ...values } : old
+      queryClient.setQueryData<UserProfile | undefined>(
+        getGetMyProfileQueryKey(),
+        (old) => (old ? { ...old, ...values } : old),
       );
       toast({
         title: "Profile updated",

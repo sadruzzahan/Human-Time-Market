@@ -1,5 +1,5 @@
 import { useParams } from "wouter";
-import { useGetPublicProfile } from "@workspace/api-client-react";
+import { useGetPublicProfile, getGetPublicProfileQueryKey } from "@workspace/api-client-react";
 import Navbar from "@/components/navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,8 @@ export default function ProfileUser() {
   const { data: profile, isLoading, isError } = useGetPublicProfile(userId, {
     query: {
       enabled: !!userId,
-      retry: false
+      retry: false,
+      queryKey: getGetPublicProfileQueryKey(userId),
     }
   });
 
