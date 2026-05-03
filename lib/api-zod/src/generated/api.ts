@@ -1536,11 +1536,23 @@ export const GetSwapResponse = zod.object({
 });
 
 /**
- * @summary Accept a proposed swap
+ * @summary Accept a proposed swap and provide the counterparty listing to exchange
  */
 export const AcceptSwapParams = zod.object({
   id: zod.coerce.number(),
 });
+
+export const AcceptSwapBody = zod
+  .object({
+    counterpartyListingId: zod
+      .number()
+      .describe(
+        "The counterparty's listing that will be transferred to the proposer",
+      ),
+  })
+  .describe(
+    "Body required when accepting a swap. The counterparty must supply their listing ID so the system can perform the bilateral exchange. If the original proposal already named a counterpartyListingId, this field must still be supplied and will be validated for ownership.\n",
+  );
 
 export const AcceptSwapResponse = zod.object({
   id: zod.number(),

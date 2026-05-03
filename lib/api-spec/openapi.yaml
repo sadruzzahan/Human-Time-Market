@@ -1275,16 +1275,22 @@ paths:
     post:
       operationId: acceptSwap
       tags: [derivatives]
-      summary: Accept a proposed swap
+      summary: Accept a proposed swap and provide the counterparty listing to exchange
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptSwapBody"
       responses:
         "200":
-          description: Swap accepted
+          description: Swap completed — commitments exchanged
           content:
             application/json:
               schema:
@@ -2868,6 +2874,20 @@ components:
         - status
         - createdAt
         - updatedAt
+
+    AcceptSwapBody:
+      type: object
+      description: >
+        Body required when accepting a swap. The counterparty must supply
+        their listing ID so the system can perform the bilateral exchange.
+        If the original proposal already named a counterpartyListingId,
+        this field must still be supplied and will be validated for ownership.
+      properties:
+        counterpartyListingId:
+          type: integer
+          description: The counterparty's listing that will be transferred to the proposer
+      required:
+        - counterpartyListingId
 
     ProposeSwapBody:
       type: object

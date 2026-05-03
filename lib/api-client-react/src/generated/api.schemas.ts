@@ -733,6 +733,15 @@ export interface TimeSwapDetail {
   updatedAt: string;
 }
 
+/**
+ * Body required when accepting a swap. The counterparty must supply their listing ID so the system can perform the bilateral exchange. If the original proposal already named a counterpartyListingId, this field must still be supplied and will be validated for ownership.
+
+ */
+export interface AcceptSwapBody {
+  /** The counterparty's listing that will be transferred to the proposer */
+  counterpartyListingId: number;
+}
+
 export interface ProposeSwapBody {
   counterpartyId: number;
   proposerListingId: number;

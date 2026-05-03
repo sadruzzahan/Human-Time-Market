@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AcceptSwapBody,
   BidDetail,
   BookingConfirmation,
   BundleDetail,
@@ -4523,7 +4524,7 @@ export function useGetSwap<
 }
 
 /**
- * @summary Accept a proposed swap
+ * @summary Accept a proposed swap and provide the counterparty listing to exchange
  */
 export const getAcceptSwapUrl = (id: number) => {
   return `/api/swaps/${id}/accept`;
@@ -4531,11 +4532,14 @@ export const getAcceptSwapUrl = (id: number) => {
 
 export const acceptSwap = async (
   id: number,
+  acceptSwapBody: AcceptSwapBody,
   options?: RequestInit,
 ): Promise<TimeSwapDetail> => {
   return customFetch<TimeSwapDetail>(getAcceptSwapUrl(id), {
     ...options,
     method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(acceptSwapBody),
   });
 };
 
@@ -4546,14 +4550,14 @@ export const getAcceptSwapMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof acceptSwap>>,
     TError,
-    { id: number },
+    { id: number; data: BodyType<AcceptSwapBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof acceptSwap>>,
   TError,
-  { id: number },
+  { id: number; data: BodyType<AcceptSwapBody> },
   TContext
 > => {
   const mutationKey = ["acceptSwap"];
@@ -4567,11 +4571,11 @@ export const getAcceptSwapMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof acceptSwap>>,
-    { id: number }
+    { id: number; data: BodyType<AcceptSwapBody> }
   > = (props) => {
-    const { id } = props ?? {};
+    const { id, data } = props ?? {};
 
-    return acceptSwap(id, requestOptions);
+    return acceptSwap(id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -4580,11 +4584,11 @@ export const getAcceptSwapMutationOptions = <
 export type AcceptSwapMutationResult = NonNullable<
   Awaited<ReturnType<typeof acceptSwap>>
 >;
-
+export type AcceptSwapMutationBody = BodyType<AcceptSwapBody>;
 export type AcceptSwapMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Accept a proposed swap
+ * @summary Accept a proposed swap and provide the counterparty listing to exchange
  */
 export const useAcceptSwap = <
   TError = ErrorType<ErrorResponse>,
@@ -4593,14 +4597,14 @@ export const useAcceptSwap = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof acceptSwap>>,
     TError,
-    { id: number },
+    { id: number; data: BodyType<AcceptSwapBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof acceptSwap>>,
   TError,
-  { id: number },
+  { id: number; data: BodyType<AcceptSwapBody> },
   TContext
 > => {
   return useMutation(getAcceptSwapMutationOptions(options));

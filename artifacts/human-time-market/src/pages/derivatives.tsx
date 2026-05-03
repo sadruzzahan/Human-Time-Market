@@ -385,87 +385,178 @@ function OptionsTab({
   );
 }
 
-function SwapsTab({
-  items, refetch, currentUserId,
-}: { items: TimeSwapDetail[]; refetch: () => void; currentUserId: number | undefined }) {
+function AcceptSwapDialog({
+  swap, myListings, onClose, onSuccess,
+}: {
+  swap: TimeSwapDetail;
+  myListings: ListingDetail[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
   const { toast } = useToast();
   const accept = useAcceptSwap();
+  const [counterpartyListingId, setCounterpartyListingId] = useState("");
+
+  const eligibleListings = myListings.filter(
+    (l) => l.status === "open" || l.status === "in_bidding",
+  );
+
+  function handleAccept() {
+    const listingId = Number(counterpartyListingId);
+    if (!listingId) {
+      toast({ title: "Please select your listing to swap", variant: "destructive" });
+      return;
+    }
+    accept.mutate(
+      { id: swap.id, data: { counterpartyListingId: listingId } },
+      {
+        onSuccess: () => {
+          toast({ title: "Swap completed", description: "Commitments exchanged successfully." });
+          onClose();
+          onSuccess();
+        },
+        onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      },
+    );
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-mono">Accept Swap</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1 text-xs">
+            <p className="font-mono text-muted-foreground uppercase text-[10px]">Incoming offer from {swap.proposerDisplayName}</p>
+            <p className="font-medium">{swap.proposerHours}h of {swap.proposerSkillCategoryName}</p>
+            <p className="text-muted-foreground">{swap.proposerListingTitle}</p>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs font-mono">Your Listing to Swap *</Label>
+            <p className="text-[10px] text-muted-foreground">
+              Select one of your open listings to exchange. The proposer will receive your services.
+            </p>
+            {eligibleListings.length === 0 ? (
+              <p className="text-xs text-destructive">You have no open listings available to swap.</p>
+            ) : (
+              <Select value={counterpartyListingId} onValueChange={setCounterpartyListingId}>
+                <SelectTrigger className="font-mono text-sm">
+                  <SelectValue placeholder="Select your listing…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {eligibleListings.map((l) => (
+                    <SelectItem key={l.id} value={String(l.id)} className="font-mono text-sm">
+                      {l.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Both listings will become committed on acceptance. Committed contracts cannot be included in swaps.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" className="font-mono text-xs" onClick={onClose}>Cancel</Button>
+          {eligibleListings.length > 0 && (
+            <Button size="sm" className="font-mono text-xs" disabled={accept.isPending} onClick={handleAccept}>
+              <CheckCircle className="h-3 w-3 mr-1.5" /> Confirm Swap
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SwapsTab({
+  items, refetch, currentUserId, myListings,
+}: { items: TimeSwapDetail[]; refetch: () => void; currentUserId: number | undefined; myListings: ListingDetail[] }) {
+  const { toast } = useToast();
   const decline = useDeclineSwap();
+  const [acceptingSwap, setAcceptingSwap] = useState<TimeSwapDetail | null>(null);
 
   if (!items.length) {
     return <EmptyState icon={<ArrowLeftRight className="h-8 w-8 text-muted-foreground" />} title="No swaps" desc="Propose or receive time swaps with other professionals." />;
   }
 
   return (
-    <div className="space-y-3">
-      {items.map((item) => (
-        <div key={item.id} className="rounded-md border border-border bg-card p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1.5">
-                <Badge variant="outline" className={`font-mono text-[10px] ${statusColor(item.status)}`}>
-                  {item.status.toUpperCase()}
-                </Badge>
-                {item.proposerId === currentUserId && (
-                  <span className="text-[10px] font-mono text-muted-foreground">PROPOSED BY YOU</span>
-                )}
-                {item.counterpartyId === currentUserId && (
-                  <span className="text-[10px] font-mono text-muted-foreground">INCOMING</span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="space-y-0.5">
-                  <p className="text-muted-foreground font-mono uppercase text-[10px]">You offer</p>
-                  <p className="font-medium">{item.proposerDisplayName}</p>
-                  <p className="text-muted-foreground">{item.proposerHours}h · {item.proposerSkillCategoryName}</p>
-                  <p className="text-muted-foreground truncate">{item.proposerListingTitle}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-muted-foreground font-mono uppercase text-[10px]">In exchange for</p>
-                  <p className="font-medium">{item.counterpartyDisplayName}</p>
-                  <p className="text-muted-foreground">{item.counterpartyHours}h · {item.counterpartySkillCategoryName}</p>
-                  {item.counterpartyListingTitle && (
-                    <p className="text-muted-foreground truncate">{item.counterpartyListingTitle}</p>
+    <>
+      <div className="space-y-3">
+        {items.map((item) => (
+          <div key={item.id} className="rounded-md border border-border bg-card p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Badge variant="outline" className={`font-mono text-[10px] ${statusColor(item.status)}`}>
+                    {item.status.toUpperCase()}
+                  </Badge>
+                  {item.proposerId === currentUserId && (
+                    <span className="text-[10px] font-mono text-muted-foreground">PROPOSED BY YOU</span>
+                  )}
+                  {item.counterpartyId === currentUserId && (
+                    <span className="text-[10px] font-mono text-muted-foreground">INCOMING</span>
                   )}
                 </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="space-y-0.5">
+                    <p className="text-muted-foreground font-mono uppercase text-[10px]">They offer</p>
+                    <p className="font-medium">{item.proposerDisplayName}</p>
+                    <p className="text-muted-foreground">{item.proposerHours}h · {item.proposerSkillCategoryName}</p>
+                    <p className="text-muted-foreground truncate">{item.proposerListingTitle}</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-muted-foreground font-mono uppercase text-[10px]">In exchange for</p>
+                    <p className="font-medium">{item.counterpartyDisplayName}</p>
+                    <p className="text-muted-foreground">{item.counterpartyHours}h · {item.counterpartySkillCategoryName}</p>
+                    {item.counterpartyListingTitle && (
+                      <p className="text-muted-foreground truncate">{item.counterpartyListingTitle}</p>
+                    )}
+                  </div>
+                </div>
+                {item.note && <p className="text-xs text-muted-foreground mt-2 italic">"{item.note}"</p>}
               </div>
-              {item.note && <p className="text-xs text-muted-foreground mt-2 italic">"{item.note}"</p>}
+              {item.status === "proposed" && item.counterpartyId === currentUserId && (
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <Button
+                    size="sm"
+                    className="font-mono text-xs gap-1.5 h-7"
+                    disabled={decline.isPending}
+                    onClick={() => setAcceptingSwap(item)}
+                  >
+                    <CheckCircle className="h-3 w-3" /> Accept
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-mono text-xs gap-1.5 h-7 text-destructive border-destructive/40 hover:bg-destructive/10"
+                    disabled={decline.isPending}
+                    onClick={() =>
+                      decline.mutate({ id: item.id }, {
+                        onSuccess: () => { toast({ title: "Swap declined" }); refetch(); },
+                        onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+                      })
+                    }
+                  >
+                    <XCircle className="h-3 w-3" /> Decline
+                  </Button>
+                </div>
+              )}
             </div>
-            {item.status === "proposed" && item.counterpartyId === currentUserId && (
-              <div className="flex flex-col gap-1.5 shrink-0">
-                <Button
-                  size="sm"
-                  className="font-mono text-xs gap-1.5 h-7"
-                  disabled={accept.isPending || decline.isPending}
-                  onClick={() =>
-                    accept.mutate({ id: item.id }, {
-                      onSuccess: () => { toast({ title: "Swap accepted" }); refetch(); },
-                      onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-                    })
-                  }
-                >
-                  <CheckCircle className="h-3 w-3" /> Accept
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="font-mono text-xs gap-1.5 h-7 text-destructive border-destructive/40 hover:bg-destructive/10"
-                  disabled={accept.isPending || decline.isPending}
-                  onClick={() =>
-                    decline.mutate({ id: item.id }, {
-                      onSuccess: () => { toast({ title: "Swap declined" }); refetch(); },
-                      onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-                    })
-                  }
-                >
-                  <XCircle className="h-3 w-3" /> Decline
-                </Button>
-              </div>
-            )}
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+      {acceptingSwap && (
+        <AcceptSwapDialog
+          swap={acceptingSwap}
+          myListings={myListings}
+          onClose={() => setAcceptingSwap(null)}
+          onSuccess={() => { setAcceptingSwap(null); refetch(); }}
+        />
+      )}
+    </>
   );
 }
 
@@ -1055,7 +1146,7 @@ export default function Derivatives() {
                 <OptionsTab items={data?.options ?? []} refetch={refetch} currentUserId={currentUserId} />
               </TabsContent>
               <TabsContent value="swaps">
-                <SwapsTab items={data?.swaps ?? []} refetch={refetch} currentUserId={currentUserId} />
+                <SwapsTab items={data?.swaps ?? []} refetch={refetch} currentUserId={currentUserId} myListings={myListings} />
               </TabsContent>
               <TabsContent value="bundles">
                 <BundlesTab items={data?.bundles ?? []} refetch={refetch} currentUserId={currentUserId} />

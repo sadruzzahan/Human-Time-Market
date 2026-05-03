@@ -18,6 +18,7 @@ import {
   CreateSecondaryListingBody,
   CreateOptionBody,
   ProposeSwapBody,
+  AcceptSwapBody,
   CreateBundleBody,
   ListSecondaryListingsQueryParams,
   ListOptionsQueryParams,
@@ -549,6 +550,9 @@ router.post("/swaps", requireAuth, async (req, res) => {
     const [proposerListing] = await db.select().from(timeListings).where(eq(timeListings.id, body.proposerListingId)).limit(1);
     if (!proposerListing) { res.status(400).json({ error: "Proposer listing not found" }); return; }
     if (proposerListing.professionalId !== user.id) { res.status(403).json({ error: "You do not own this listing" }); return; }
+    if (proposerListing.status !== "open" && proposerListing.status !== "in_bidding") {
+      res.status(400).json({ error: "Only open listings can be included in a swap — committed contracts cannot be reassigned" }); return;
+    }
 
     const [created] = await db.insert(timeSwaps).values({
       proposerId: user.id,
@@ -592,6 +596,9 @@ router.get("/swaps/:id", requireAuth, async (req, res) => {
 router.post("/swaps/:id/accept", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   const id = Number(req.params.id);
+  const parsed = AcceptSwapBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Must provide counterpartyListingId to accept a swap" }); return; }
+
   try {
     const user = await getDbUser(clerkId);
     if (!user) { res.status(403).json({ error: "Forbidden" }); return; }
@@ -601,41 +608,56 @@ router.post("/swaps/:id/accept", requireAuth, async (req, res) => {
     if (swap.counterpartyId !== user.id) { res.status(403).json({ error: "Only the counterparty can accept a swap" }); return; }
     if (swap.status !== "proposed") { res.status(400).json({ error: "Swap is not in proposed state" }); return; }
 
-    // Execute commitment exchange atomically with ownership-scoped WHERE clauses
+    const counterpartyListingId = parsed.data.counterpartyListingId;
+
+    // Execute bilateral commitment exchange atomically — both listings must be open/in_bidding
     await db.transaction(async (tx) => {
-      // Verify and transfer proposer's listing — must be owned by proposer
+      // Verify proposer's listing: must be owned by proposer AND not already committed
       const [proposerListing] = await tx
         .select()
         .from(timeListings)
         .where(and(eq(timeListings.id, swap.proposerListingId), eq(timeListings.professionalId, swap.proposerId)))
         .limit(1);
-      if (!proposerListing) throw new Error("Proposer listing ownership check failed — listing not owned by proposer");
-
-      const proposerNewStatus =
-        proposerListing.status === "open" || proposerListing.status === "in_bidding" ? "committed" : proposerListing.status;
-      await tx
-        .update(timeListings)
-        .set({ buyerId: swap.counterpartyId, status: proposerNewStatus, updatedAt: new Date() })
-        .where(and(eq(timeListings.id, swap.proposerListingId), eq(timeListings.professionalId, swap.proposerId)));
-
-      // Verify and transfer counterparty's listing — must be owned by counterparty
-      if (swap.counterpartyListingId) {
-        const [cpListing] = await tx
-          .select()
-          .from(timeListings)
-          .where(and(eq(timeListings.id, swap.counterpartyListingId), eq(timeListings.professionalId, swap.counterpartyId)))
-          .limit(1);
-        if (!cpListing) throw new Error("Counterparty listing ownership check failed — listing not owned by counterparty");
-
-        const cpNewStatus =
-          cpListing.status === "open" || cpListing.status === "in_bidding" ? "committed" : cpListing.status;
-        await tx
-          .update(timeListings)
-          .set({ buyerId: swap.proposerId, status: cpNewStatus, updatedAt: new Date() })
-          .where(and(eq(timeListings.id, swap.counterpartyListingId), eq(timeListings.professionalId, swap.counterpartyId)));
+      if (!proposerListing) throw new Error("Proposer listing not found or not owned by proposer");
+      if (proposerListing.status !== "open" && proposerListing.status !== "in_bidding") {
+        throw new Error("Proposer's listing is already committed — cannot include in a swap");
       }
 
-      await tx.update(timeSwaps).set({ status: "completed", updatedAt: new Date() }).where(eq(timeSwaps.id, id));
+      // Verify counterparty's listing: must be owned by counterparty AND not already committed
+      const [cpListing] = await tx
+        .select()
+        .from(timeListings)
+        .where(and(eq(timeListings.id, counterpartyListingId), eq(timeListings.professionalId, swap.counterpartyId)))
+        .limit(1);
+      if (!cpListing) throw new Error("Counterparty listing not found or not owned by counterparty");
+      if (cpListing.status !== "open" && cpListing.status !== "in_bidding") {
+        throw new Error("Counterparty's listing is already committed — cannot include in a swap");
+      }
+
+      // Transfer proposer's listing to counterparty (counterparty receives proposer's services)
+      await tx
+        .update(timeListings)
+        .set({ buyerId: swap.counterpartyId, status: "committed", updatedAt: new Date() })
+        .where(and(
+          eq(timeListings.id, swap.proposerListingId),
+          eq(timeListings.professionalId, swap.proposerId),
+          or(eq(timeListings.status, "open"), eq(timeListings.status, "in_bidding")),
+        ));
+
+      // Transfer counterparty's listing to proposer (proposer receives counterparty's services)
+      await tx
+        .update(timeListings)
+        .set({ buyerId: swap.proposerId, status: "committed", updatedAt: new Date() })
+        .where(and(
+          eq(timeListings.id, counterpartyListingId),
+          eq(timeListings.professionalId, swap.counterpartyId),
+          or(eq(timeListings.status, "open"), eq(timeListings.status, "in_bidding")),
+        ));
+
+      await tx
+        .update(timeSwaps)
+        .set({ status: "completed", counterpartyListingId, updatedAt: new Date() })
+        .where(eq(timeSwaps.id, id));
     });
 
     // Record derivative trades for both sides of the exchange
