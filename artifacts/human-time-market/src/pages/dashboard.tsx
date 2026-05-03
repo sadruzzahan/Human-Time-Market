@@ -557,10 +557,31 @@ function RateHealthPanel() {
 }
 
 // ---------------------------------------------------------------------------
-// Cash flow chart
+// Cash flow chart (weekly + monthly toggle)
 // ---------------------------------------------------------------------------
 
+function toMonthly(weeks: CashFlowWeek[]): { label: string; projectedCents: number; contracts: number }[] {
+  const map = new Map<string, { projectedCents: number; contracts: number }>();
+  for (const w of weeks) {
+    const d = new Date(w.weekStart);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const existing = map.get(key) ?? { projectedCents: 0, contracts: 0 };
+    map.set(key, {
+      projectedCents: existing.projectedCents + w.projectedCents,
+      contracts: Math.max(existing.contracts, w.contracts),
+    });
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, v]) => {
+      const [yr, mo] = key.split("-");
+      const label = new Date(Number(yr), Number(mo) - 1, 1).toLocaleString("en-US", { month: "short", year: "2-digit" });
+      return { label, ...v };
+    });
+}
+
 function CashFlowChart() {
+  const [period, setPeriod] = useState<"weekly" | "monthly">("weekly");
   const { data, isLoading } = useGetProfessionalCashFlow();
 
   if (isLoading) return <Skeleton className="h-48 w-full" />;
@@ -570,27 +591,42 @@ function CashFlowChart() {
     </div>
   );
 
-  const chartData = (data as CashFlowWeek[]).map((w) => ({
-    week: fmtWeek(w.weekStart),
-    earnings: Math.round(w.projectedCents / 100),
-    contracts: w.contracts,
-  }));
+  const weeks = data as CashFlowWeek[];
+  const total = weeks.reduce((s, w) => s + w.projectedCents, 0);
 
-  const total = (data as CashFlowWeek[]).reduce((s, w) => s + w.projectedCents, 0);
+  const chartData = period === "weekly"
+    ? weeks.map((w) => ({ label: fmtWeek(w.weekStart), earnings: Math.round(w.projectedCents / 100) }))
+    : toMonthly(weeks).map((m) => ({ label: m.label, earnings: Math.round(m.projectedCents / 100) }));
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4 p-3 rounded-lg border border-border bg-card">
-        <DollarSign className="h-5 w-5 text-emerald-400 shrink-0" />
-        <div>
-          <p className="text-xs text-muted-foreground">Total projected (all weeks)</p>
-          <p className="font-mono font-bold text-lg">{fmtMoney(total)}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4 p-3 rounded-lg border border-border bg-card flex-1 mr-4">
+          <DollarSign className="h-5 w-5 text-emerald-400 shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground">Total projected ({period === "weekly" ? "all weeks" : "all months"})</p>
+            <p className="font-mono font-bold text-lg">{fmtMoney(total)}</p>
+          </div>
+        </div>
+        <div className="flex rounded-md border border-border overflow-hidden shrink-0">
+          <button
+            onClick={() => setPeriod("weekly")}
+            className={`px-3 py-1.5 text-xs font-mono transition-colors ${period === "weekly" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"}`}
+          >
+            Weekly
+          </button>
+          <button
+            onClick={() => setPeriod("monthly")}
+            className={`px-3 py-1.5 text-xs font-mono border-l border-border transition-colors ${period === "monthly" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"}`}
+          >
+            Monthly
+          </button>
         </div>
       </div>
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-            <XAxis dataKey="week" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
             <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
             <ReTooltip
               contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
@@ -599,6 +635,53 @@ function CashFlowChart() {
             <Bar dataKey="earnings" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Contract timeline (Gantt view)
+// ---------------------------------------------------------------------------
+
+type TimelineContract = { id: number; title: string; startDate: string; endDate: string; status: string };
+
+function ContractTimeline({ contracts }: { contracts: TimelineContract[] }) {
+  if (!contracts.length) return null;
+
+  const dates = contracts.flatMap((c) => [new Date(c.startDate).getTime(), new Date(c.endDate).getTime()]);
+  const minMs = Math.min(...dates);
+  const maxMs = Math.max(...dates);
+  const rangeMs = Math.max(maxMs - minMs, 1);
+
+  const statusColor = (s: string) =>
+    s === "completed" ? "bg-emerald-500" :
+    s === "in_dispute" ? "bg-destructive" :
+    "bg-primary";
+
+  return (
+    <div className="border border-border rounded-lg p-4 bg-card space-y-2 overflow-x-auto">
+      <div className="flex items-center justify-between text-xs text-muted-foreground font-mono mb-3">
+        <span>{new Date(minMs).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+        <span>{new Date(maxMs).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+      </div>
+      <div className="space-y-2 min-w-[400px]">
+        {contracts.map((c) => {
+          const startPct = ((new Date(c.startDate).getTime() - minMs) / rangeMs) * 100;
+          const widthPct = ((new Date(c.endDate).getTime() - new Date(c.startDate).getTime()) / rangeMs) * 100;
+          return (
+            <div key={c.id} className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground truncate w-28 shrink-0 text-right font-mono">{c.title}</span>
+              <div className="flex-1 relative h-6 bg-muted rounded">
+                <div
+                  className={`absolute top-0 h-full rounded ${statusColor(c.status)} opacity-80`}
+                  style={{ left: `${startPct}%`, width: `${Math.max(widthPct, 1)}%` }}
+                  title={`${c.title}: ${c.startDate} → ${c.endDate}`}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -736,6 +819,19 @@ export default function Dashboard() {
 
             <Separator />
 
+            {/* Contract Timeline */}
+            {activeProContracts.length > 0 && (
+              <section data-testid="section-pro-timeline">
+                <h2 className="font-mono text-lg font-bold mb-4 flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  Contract Timeline
+                </h2>
+                <ContractTimeline contracts={activeProContracts} />
+              </section>
+            )}
+
+            {activeProContracts.length > 0 && <Separator />}
+
             {/* Rate Health */}
             <section data-testid="section-rate-health">
               <h2 className="font-mono text-lg font-bold mb-4 flex items-center gap-2">
@@ -794,6 +890,20 @@ export default function Dashboard() {
                 </div>
               )}
             </section>
+
+            {/* Buyer Contract Timeline */}
+            {activeBuyerContracts.length > 0 && (
+              <>
+                <Separator />
+                <section data-testid="section-buyer-timeline">
+                  <h2 className="font-mono text-lg font-bold mb-4 flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-primary" />
+                    Engagement Timeline
+                  </h2>
+                  <ContractTimeline contracts={activeBuyerContracts} />
+                </section>
+              </>
+            )}
 
             <Separator />
 

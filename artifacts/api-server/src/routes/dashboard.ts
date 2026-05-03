@@ -376,6 +376,9 @@ router.get("/dashboard/buyer/commitments", requireAuth, async (req, res) => {
       )
       .orderBy(desc(timeListings.updatedAt));
 
+    const now = new Date();
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+
     const result = await Promise.all(
       listings.map(async ({ time_listings: l, skill_categories: cat }) => {
         const [professional] = await db.select().from(users).where(eq(users.id, l.professionalId)).limit(1);
@@ -384,6 +387,31 @@ router.get("/dashboard/buyer/commitments", requireAuth, async (req, res) => {
         const total = totalContractHours({ hoursPerWeek: l.hoursPerWeek, startDate: l.startDate, endDate: l.endDate });
         const [escrow] = await db.select().from(escrowRecords).where(eq(escrowRecords.listingId, l.id)).limit(1);
         const dispute = await buildDispute(l.id);
+
+        if (l.status === "committed") {
+          const endMs = new Date(l.endDate).getTime();
+          if (endMs - now.getTime() <= sevenDays && endMs > now.getTime()) {
+            const existing = await db
+              .select()
+              .from(notifications)
+              .where(
+                and(
+                  eq(notifications.userId, user.id),
+                  eq(notifications.type, "contract_expiring"),
+                  sql`${notifications.payload}->>'listingId' = ${String(l.id)}`,
+                ),
+              )
+              .limit(1);
+            if (existing.length === 0) {
+              await createNotification(user.id, "contract_expiring", {
+                listingId: l.id,
+                listingTitle: l.title,
+                endDate: l.endDate,
+              });
+            }
+          }
+        }
+
         return {
           id: l.id,
           title: l.title,
