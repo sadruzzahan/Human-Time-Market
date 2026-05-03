@@ -110,7 +110,20 @@ router.get("/listings", async (req, res) => {
 
     // All filters pushed into SQL so that pagination totals are always accurate
     const filters: SQL[] = [eq(timeListings.status, statusFilter ?? "open")];
-    if (skillCategoryId) filters.push(eq(timeListings.skillCategoryId, skillCategoryId));
+    if (skillCategoryId) {
+      // If the caller passes a parent category ID, expand to all its children so that
+      // the UI category chips (which show parent-level labels) correctly match rows
+      // that were stored with child-level category IDs.
+      const children = await db
+        .select({ id: skillCategories.id })
+        .from(skillCategories)
+        .where(eq(skillCategories.parentId, skillCategoryId));
+      if (children.length > 0) {
+        filters.push(inArray(timeListings.skillCategoryId, children.map((c) => c.id)));
+      } else {
+        filters.push(eq(timeListings.skillCategoryId, skillCategoryId));
+      }
+    }
     if (listingType) filters.push(eq(timeListings.listingType, listingType));
     if (minRateCents) filters.push(gte(timeListings.rateCents, minRateCents));
     if (maxRateCents) filters.push(lte(timeListings.rateCents, maxRateCents));

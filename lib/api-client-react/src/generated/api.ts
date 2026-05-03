@@ -147,7 +147,7 @@ export const getGetMyProfileQueryKey = () => {
 
 export const getGetMyProfileQueryOptions = <
   TData = Awaited<ReturnType<typeof getMyProfile>>,
-  TError = ErrorType<ErrorResponse>,
+  TError = ErrorType<unknown>,
 >(options?: {
   query?: UseQueryOptions<
     Awaited<ReturnType<typeof getMyProfile>>,
@@ -174,7 +174,7 @@ export const getGetMyProfileQueryOptions = <
 export type GetMyProfileQueryResult = NonNullable<
   Awaited<ReturnType<typeof getMyProfile>>
 >;
-export type GetMyProfileQueryError = ErrorType<ErrorResponse>;
+export type GetMyProfileQueryError = ErrorType<unknown>;
 
 /**
  * @summary Get the current user's profile
@@ -182,7 +182,7 @@ export type GetMyProfileQueryError = ErrorType<ErrorResponse>;
 
 export function useGetMyProfile<
   TData = Awaited<ReturnType<typeof getMyProfile>>,
-  TError = ErrorType<ErrorResponse>,
+  TError = ErrorType<unknown>,
 >(options?: {
   query?: UseQueryOptions<
     Awaited<ReturnType<typeof getMyProfile>>,

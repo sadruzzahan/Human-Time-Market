@@ -78,7 +78,18 @@ router.get("/rfps", async (req, res) => {
     const { skillCategoryId, status: statusFilter, limit = 20, offset = 0 } = params.data;
 
     const filters: SQL[] = [eq(rfps.status, statusFilter ?? "open")];
-    if (skillCategoryId) filters.push(eq(rfps.skillCategoryId, skillCategoryId));
+    if (skillCategoryId) {
+      // Expand parent category IDs to their children so UI parent-level chips work correctly
+      const children = await db
+        .select({ id: skillCategories.id })
+        .from(skillCategories)
+        .where(eq(skillCategories.parentId, skillCategoryId));
+      if (children.length > 0) {
+        filters.push(inArray(rfps.skillCategoryId, children.map((c) => c.id)));
+      } else {
+        filters.push(eq(rfps.skillCategoryId, skillCategoryId));
+      }
+    }
 
     const where = and(...filters);
 

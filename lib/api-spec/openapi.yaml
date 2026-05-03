@@ -46,12 +46,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserProfile"
-        "404":
-          description: Profile not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
     put:
       operationId: upsertMyProfile
       tags: [users]
@@ -199,7 +193,6 @@ paths:
           in: query
           schema:
             type: string
-            format: date
         - name: experienceLevel
           in: query
           schema:

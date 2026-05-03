@@ -168,7 +168,7 @@ export const ListListingsQueryParams = zod.object({
     .optional(),
   minRateCents: zod.coerce.number().optional(),
   maxRateCents: zod.coerce.number().optional(),
-  startDateAfter: zod.date().optional(),
+  startDateAfter: zod.coerce.string().optional(),
   experienceLevel: zod
     .enum(["junior", "mid", "senior", "principal", "expert"])
     .optional(),
