@@ -903,6 +903,532 @@ paths:
         "204":
           description: Marked as read
 
+  /secondary-market:
+    get:
+      operationId: listSecondaryListings
+      tags: [secondary-market]
+      summary: Browse open secondary listings
+      parameters:
+        - name: skillCategoryId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Secondary listings page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondaryListingsPage"
+    post:
+      operationId: createSecondaryListing
+      tags: [secondary-market]
+      summary: List a committed contract for resale
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSecondaryListingBody"
+      responses:
+        "201":
+          description: Secondary listing created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondaryListingDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /secondary-market/{id}:
+    get:
+      operationId: getSecondaryListing
+      tags: [secondary-market]
+      summary: Get a secondary listing by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Secondary listing detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondaryListingDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: cancelSecondaryListing
+      tags: [secondary-market]
+      summary: Cancel (withdraw) a secondary listing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondaryListingDetail"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /secondary-market/{id}/purchase:
+    post:
+      operationId: purchaseSecondaryListing
+      tags: [secondary-market]
+      summary: Purchase a secondary listing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Purchase confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondaryListingDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /options:
+    get:
+      operationId: listOptions
+      tags: [derivatives]
+      summary: Browse open time options
+      parameters:
+        - name: skillCategoryId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Options page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OptionsPage"
+    post:
+      operationId: createOption
+      tags: [derivatives]
+      summary: Create a time option (professional only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOptionBody"
+      responses:
+        "201":
+          description: Option created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeOptionDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /options/{id}:
+    get:
+      operationId: getOption
+      tags: [derivatives]
+      summary: Get a time option by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Time option detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeOptionDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /options/{id}/purchase:
+    post:
+      operationId: purchaseOption
+      tags: [derivatives]
+      summary: Purchase a time option (pay premium)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Option purchased
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeOptionDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /options/{id}/exercise:
+    post:
+      operationId: exerciseOption
+      tags: [derivatives]
+      summary: Exercise a time option (convert to committed contract)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Option exercised
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeOptionDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /swaps:
+    get:
+      operationId: listSwaps
+      tags: [derivatives]
+      summary: Get the current user's time swaps
+      responses:
+        "200":
+          description: List of swaps
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeSwapDetail"
+    post:
+      operationId: proposeSwap
+      tags: [derivatives]
+      summary: Propose a time swap with another professional
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposeSwapBody"
+      responses:
+        "201":
+          description: Swap proposed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeSwapDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /swaps/{id}:
+    get:
+      operationId: getSwap
+      tags: [derivatives]
+      summary: Get a time swap by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Swap detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeSwapDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /swaps/{id}/accept:
+    post:
+      operationId: acceptSwap
+      tags: [derivatives]
+      summary: Accept a proposed swap
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Swap accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeSwapDetail"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /swaps/{id}/decline:
+    post:
+      operationId: declineSwap
+      tags: [derivatives]
+      summary: Decline a proposed swap
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Swap declined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeSwapDetail"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bundles:
+    get:
+      operationId: listBundles
+      tags: [derivatives]
+      summary: Browse open time bundles
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Bundles page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundlesPage"
+    post:
+      operationId: createBundle
+      tags: [derivatives]
+      summary: Create a time bundle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBundleBody"
+      responses:
+        "201":
+          description: Bundle created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bundles/{id}:
+    get:
+      operationId: getBundle
+      tags: [derivatives]
+      summary: Get a bundle by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bundle detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: cancelBundle
+      tags: [derivatives]
+      summary: Cancel a bundle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bundle cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bundles/{id}/purchase:
+    post:
+      operationId: purchaseBundle
+      tags: [derivatives]
+      summary: Purchase a bundle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bundle purchased
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BundleDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /derivatives/portfolio:
+    get:
+      operationId: getDerivativesPortfolio
+      tags: [derivatives]
+      summary: Get the current user's full derivatives portfolio
+      responses:
+        "200":
+          description: Derivatives portfolio
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DerivativesPortfolio"
+
 components:
   schemas:
     HealthStatus:
@@ -2040,3 +2566,443 @@ components:
         - skillCategoryName
         - myRateCents
         - recommendation
+
+    SecondaryListingStatus:
+      type: string
+      enum: [open, sold, cancelled]
+
+    OptionStatus:
+      type: string
+      enum: [open, purchased, exercised, expired, cancelled]
+
+    SwapStatus:
+      type: string
+      enum: [proposed, accepted, declined, completed, cancelled]
+
+    BundleStatus:
+      type: string
+      enum: [open, sold, cancelled]
+
+    SecondaryListingDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        originalListingId:
+          type: integer
+        originalListingTitle:
+          type: string
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        professionalDisplayName:
+          type: string
+        hoursPerWeek:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        sellerId:
+          type: integer
+        sellerDisplayName:
+          type: string
+        buyerId:
+          type: ["integer", "null"]
+        askPriceCents:
+          type: integer
+        status:
+          $ref: "#/components/schemas/SecondaryListingStatus"
+        listedAt:
+          type: string
+          format: date-time
+        soldAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - originalListingId
+        - originalListingTitle
+        - skillCategoryId
+        - skillCategoryName
+        - professionalDisplayName
+        - hoursPerWeek
+        - startDate
+        - endDate
+        - sellerId
+        - sellerDisplayName
+        - askPriceCents
+        - status
+        - listedAt
+
+    SecondaryListingsPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecondaryListingDetail"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - items
+        - total
+        - limit
+        - offset
+
+    CreateSecondaryListingBody:
+      type: object
+      properties:
+        originalListingId:
+          type: integer
+        askPriceCents:
+          type: integer
+          minimum: 1
+      required:
+        - originalListingId
+        - askPriceCents
+
+    TimeOptionDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        professionalId:
+          type: integer
+        professionalDisplayName:
+          type: string
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        hours:
+          type: integer
+        windowStart:
+          type: string
+          format: date
+        windowEnd:
+          type: string
+          format: date
+        premiumCents:
+          type: integer
+        fullRateCents:
+          type: integer
+        holderId:
+          type: ["integer", "null"]
+        holderDisplayName:
+          type: ["string", "null"]
+        status:
+          $ref: "#/components/schemas/OptionStatus"
+        exercisedAt:
+          type: ["string", "null"]
+          format: date-time
+        expiresAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - professionalId
+        - professionalDisplayName
+        - skillCategoryId
+        - skillCategoryName
+        - hours
+        - windowStart
+        - windowEnd
+        - premiumCents
+        - fullRateCents
+        - status
+        - createdAt
+
+    OptionsPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeOptionDetail"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - items
+        - total
+        - limit
+        - offset
+
+    CreateOptionBody:
+      type: object
+      properties:
+        skillCategoryId:
+          type: integer
+        hours:
+          type: integer
+          minimum: 1
+        windowStart:
+          type: string
+          format: date
+        windowEnd:
+          type: string
+          format: date
+        premiumCents:
+          type: integer
+          minimum: 1
+        fullRateCents:
+          type: integer
+          minimum: 1
+        expiresAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - skillCategoryId
+        - hours
+        - windowStart
+        - windowEnd
+        - premiumCents
+        - fullRateCents
+
+    TimeSwapDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        proposerId:
+          type: integer
+        proposerDisplayName:
+          type: string
+        counterpartyId:
+          type: integer
+        counterpartyDisplayName:
+          type: string
+        proposerListingId:
+          type: integer
+        proposerListingTitle:
+          type: string
+        counterpartyListingId:
+          type: ["integer", "null"]
+        counterpartyListingTitle:
+          type: ["string", "null"]
+        proposerHours:
+          type: integer
+        counterpartyHours:
+          type: integer
+        proposerSkillCategoryId:
+          type: integer
+        proposerSkillCategoryName:
+          type: string
+        counterpartySkillCategoryId:
+          type: integer
+        counterpartySkillCategoryName:
+          type: string
+        note:
+          type: ["string", "null"]
+        status:
+          $ref: "#/components/schemas/SwapStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - proposerId
+        - proposerDisplayName
+        - counterpartyId
+        - counterpartyDisplayName
+        - proposerListingId
+        - proposerListingTitle
+        - proposerHours
+        - counterpartyHours
+        - proposerSkillCategoryId
+        - proposerSkillCategoryName
+        - counterpartySkillCategoryId
+        - counterpartySkillCategoryName
+        - status
+        - createdAt
+        - updatedAt
+
+    ProposeSwapBody:
+      type: object
+      properties:
+        counterpartyId:
+          type: integer
+        proposerListingId:
+          type: integer
+        counterpartyListingId:
+          type: ["integer", "null"]
+        proposerHours:
+          type: integer
+          minimum: 1
+        counterpartyHours:
+          type: integer
+          minimum: 1
+        proposerSkillCategoryId:
+          type: integer
+        counterpartySkillCategoryId:
+          type: integer
+        note:
+          type: ["string", "null"]
+      required:
+        - counterpartyId
+        - proposerListingId
+        - proposerHours
+        - counterpartyHours
+        - proposerSkillCategoryId
+        - counterpartySkillCategoryId
+
+    BundleItemDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        listingId:
+          type: integer
+        listingTitle:
+          type: string
+        professionalId:
+          type: integer
+        professionalDisplayName:
+          type: string
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        hours:
+          type: integer
+      required:
+        - id
+        - listingId
+        - listingTitle
+        - professionalId
+        - professionalDisplayName
+        - skillCategoryId
+        - skillCategoryName
+        - hours
+
+    BundleDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        creatorId:
+          type: integer
+        creatorDisplayName:
+          type: string
+        buyerId:
+          type: ["integer", "null"]
+        buyerDisplayName:
+          type: ["string", "null"]
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        totalPriceCents:
+          type: integer
+        status:
+          $ref: "#/components/schemas/BundleStatus"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BundleItemDetail"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - creatorId
+        - creatorDisplayName
+        - title
+        - totalPriceCents
+        - status
+        - items
+        - createdAt
+
+    BundlesPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BundleDetail"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - items
+        - total
+        - limit
+        - offset
+
+    CreateBundleItemBody:
+      type: object
+      properties:
+        listingId:
+          type: integer
+        hours:
+          type: integer
+          minimum: 1
+      required:
+        - listingId
+        - hours
+
+    CreateBundleBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        totalPriceCents:
+          type: integer
+          minimum: 1
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateBundleItemBody"
+          minItems: 1
+      required:
+        - title
+        - totalPriceCents
+        - items
+
+    DerivativesPortfolio:
+      type: object
+      properties:
+        secondaryListings:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecondaryListingDetail"
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeOptionDetail"
+        swaps:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeSwapDetail"
+        bundles:
+          type: array
+          items:
+            $ref: "#/components/schemas/BundleDetail"
+      required:
+        - secondaryListings
+        - options
+        - swaps
+        - bundles
+

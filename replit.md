@@ -57,6 +57,11 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `orders` — order book orders (bid/ask) per skill category, with rateCents, quantityHours, status (open/filled/cancelled/expired)
 - `trades` — executed trades from matched orders (price, quantity, buyer/seller references)
 - `price_snapshots` — daily VWAP snapshots per skill category for historical charting
+- `secondary_listings` — resale listings for existing time contracts; fields: holderId, listingId, askCents, status
+- `time_options` — call options on professional time windows; fields: professionalId, skillCategoryId, hours, windowStart/End, premiumCents, fullRateCents, status, expiresAt
+- `time_swaps` — peer-to-peer swap proposals between two listing holders; fields: initiatorId, counterpartyId, offeredListingId, requestedListingId, status
+- `bundles` — grouped packages of time listings; fields: professionalId, name, description, priceCents, status
+- `bundle_items` — junction table linking bundles to individual listings
 
 ## API Routes
 - `GET /api/users/me` — get or auto-create authenticated user profile
@@ -79,6 +84,15 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `GET /api/price-index/events` — SSE stream for real-time price index updates
 - `POST /api/orders` — place a bid or ask order (requires auth)
 - `DELETE /api/orders/:orderId` — cancel an open order (requires auth)
+- `GET/POST /api/secondary-market` — list/create secondary resale listings
+- `GET/DELETE/POST /api/secondary-market/:id` — single secondary listing; `/purchase` to buy
+- `GET/POST /api/options` — list/create time options
+- `GET/POST /api/options/:id` — single option; `/purchase` to buy, `/exercise` to exercise
+- `GET/POST /api/swaps` — list/propose peer-to-peer swaps (auth required)
+- `GET/POST /api/swaps/:id` — single swap; `/accept` or `/decline`
+- `GET/POST /api/bundles` — list/create professional bundles
+- `GET/DELETE/POST /api/bundles/:id` — single bundle; `/purchase` to buy
+- `GET /api/derivatives/portfolio` — authenticated user's full derivatives portfolio (listings, options, swaps, bundles)
 
 ## Frontend Routes
 - `/` — home (redirects to marketplace or onboarding based on auth state)
@@ -86,6 +100,8 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `/listings/:listingId` — listing detail with bid/book/cancel actions
 - `/onboarding` — 2-step profile setup (profile form → skill selection)
 - `/price-index` — live time price index; terminal-style grid grouped by skill category; expandable rows show order book depth + price history chart + place order dialog
+- `/secondary-market` — secondary market browse page; tabs for Resale contracts, Time Options, Bundles; skill-category filter; buy/purchase dialogs
+- `/derivatives` — authenticated derivatives portfolio; tabs for secondary listings held, options, pending swaps, bundles (protected route)
 - `/dashboard`, `/profile/me`, `/profile/:userId` — other pages
 - `/sign-in`, `/sign-up` — Clerk auth pages
 

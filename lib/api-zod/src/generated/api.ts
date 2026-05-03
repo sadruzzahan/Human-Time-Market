@@ -1147,3 +1147,680 @@ export const MarkNotificationsReadBody = zod.object({
     .optional()
     .describe("Notification IDs to mark as read; omit to mark all as read"),
 });
+
+/**
+ * @summary Browse open secondary listings
+ */
+export const listSecondaryListingsQueryLimitDefault = 20;
+export const listSecondaryListingsQueryOffsetDefault = 0;
+
+export const ListSecondaryListingsQueryParams = zod.object({
+  skillCategoryId: zod.coerce.number().optional(),
+  limit: zod.coerce.number().default(listSecondaryListingsQueryLimitDefault),
+  offset: zod.coerce.number().default(listSecondaryListingsQueryOffsetDefault),
+});
+
+export const ListSecondaryListingsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      originalListingId: zod.number(),
+      originalListingTitle: zod.string(),
+      skillCategoryId: zod.number(),
+      skillCategoryName: zod.string(),
+      professionalDisplayName: zod.string(),
+      hoursPerWeek: zod.number(),
+      startDate: zod.coerce.date(),
+      endDate: zod.coerce.date(),
+      sellerId: zod.number(),
+      sellerDisplayName: zod.string(),
+      buyerId: zod.number().nullish(),
+      askPriceCents: zod.number(),
+      status: zod.enum(["open", "sold", "cancelled"]),
+      listedAt: zod.coerce.date(),
+      soldAt: zod.coerce.date().nullish(),
+    }),
+  ),
+  total: zod.number(),
+  limit: zod.number(),
+  offset: zod.number(),
+});
+
+/**
+ * @summary List a committed contract for resale
+ */
+
+export const CreateSecondaryListingBody = zod.object({
+  originalListingId: zod.number(),
+  askPriceCents: zod.number().min(1),
+});
+
+/**
+ * @summary Get a secondary listing by ID
+ */
+export const GetSecondaryListingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetSecondaryListingResponse = zod.object({
+  id: zod.number(),
+  originalListingId: zod.number(),
+  originalListingTitle: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  professionalDisplayName: zod.string(),
+  hoursPerWeek: zod.number(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  sellerId: zod.number(),
+  sellerDisplayName: zod.string(),
+  buyerId: zod.number().nullish(),
+  askPriceCents: zod.number(),
+  status: zod.enum(["open", "sold", "cancelled"]),
+  listedAt: zod.coerce.date(),
+  soldAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Cancel (withdraw) a secondary listing
+ */
+export const CancelSecondaryListingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CancelSecondaryListingResponse = zod.object({
+  id: zod.number(),
+  originalListingId: zod.number(),
+  originalListingTitle: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  professionalDisplayName: zod.string(),
+  hoursPerWeek: zod.number(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  sellerId: zod.number(),
+  sellerDisplayName: zod.string(),
+  buyerId: zod.number().nullish(),
+  askPriceCents: zod.number(),
+  status: zod.enum(["open", "sold", "cancelled"]),
+  listedAt: zod.coerce.date(),
+  soldAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Purchase a secondary listing
+ */
+export const PurchaseSecondaryListingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PurchaseSecondaryListingResponse = zod.object({
+  id: zod.number(),
+  originalListingId: zod.number(),
+  originalListingTitle: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  professionalDisplayName: zod.string(),
+  hoursPerWeek: zod.number(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  sellerId: zod.number(),
+  sellerDisplayName: zod.string(),
+  buyerId: zod.number().nullish(),
+  askPriceCents: zod.number(),
+  status: zod.enum(["open", "sold", "cancelled"]),
+  listedAt: zod.coerce.date(),
+  soldAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Browse open time options
+ */
+export const listOptionsQueryLimitDefault = 20;
+export const listOptionsQueryOffsetDefault = 0;
+
+export const ListOptionsQueryParams = zod.object({
+  skillCategoryId: zod.coerce.number().optional(),
+  limit: zod.coerce.number().default(listOptionsQueryLimitDefault),
+  offset: zod.coerce.number().default(listOptionsQueryOffsetDefault),
+});
+
+export const ListOptionsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      professionalId: zod.number(),
+      professionalDisplayName: zod.string(),
+      skillCategoryId: zod.number(),
+      skillCategoryName: zod.string(),
+      hours: zod.number(),
+      windowStart: zod.coerce.date(),
+      windowEnd: zod.coerce.date(),
+      premiumCents: zod.number(),
+      fullRateCents: zod.number(),
+      holderId: zod.number().nullish(),
+      holderDisplayName: zod.string().nullish(),
+      status: zod.enum([
+        "open",
+        "purchased",
+        "exercised",
+        "expired",
+        "cancelled",
+      ]),
+      exercisedAt: zod.coerce.date().nullish(),
+      expiresAt: zod.coerce.date().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  total: zod.number(),
+  limit: zod.number(),
+  offset: zod.number(),
+});
+
+/**
+ * @summary Create a time option (professional only)
+ */
+
+export const CreateOptionBody = zod.object({
+  skillCategoryId: zod.number(),
+  hours: zod.number().min(1),
+  windowStart: zod.coerce.date(),
+  windowEnd: zod.coerce.date(),
+  premiumCents: zod.number().min(1),
+  fullRateCents: zod.number().min(1),
+  expiresAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Get a time option by ID
+ */
+export const GetOptionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetOptionResponse = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  professionalDisplayName: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  hours: zod.number(),
+  windowStart: zod.coerce.date(),
+  windowEnd: zod.coerce.date(),
+  premiumCents: zod.number(),
+  fullRateCents: zod.number(),
+  holderId: zod.number().nullish(),
+  holderDisplayName: zod.string().nullish(),
+  status: zod.enum(["open", "purchased", "exercised", "expired", "cancelled"]),
+  exercisedAt: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Purchase a time option (pay premium)
+ */
+export const PurchaseOptionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PurchaseOptionResponse = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  professionalDisplayName: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  hours: zod.number(),
+  windowStart: zod.coerce.date(),
+  windowEnd: zod.coerce.date(),
+  premiumCents: zod.number(),
+  fullRateCents: zod.number(),
+  holderId: zod.number().nullish(),
+  holderDisplayName: zod.string().nullish(),
+  status: zod.enum(["open", "purchased", "exercised", "expired", "cancelled"]),
+  exercisedAt: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Exercise a time option (convert to committed contract)
+ */
+export const ExerciseOptionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ExerciseOptionResponse = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  professionalDisplayName: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  hours: zod.number(),
+  windowStart: zod.coerce.date(),
+  windowEnd: zod.coerce.date(),
+  premiumCents: zod.number(),
+  fullRateCents: zod.number(),
+  holderId: zod.number().nullish(),
+  holderDisplayName: zod.string().nullish(),
+  status: zod.enum(["open", "purchased", "exercised", "expired", "cancelled"]),
+  exercisedAt: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Get the current user's time swaps
+ */
+export const ListSwapsResponseItem = zod.object({
+  id: zod.number(),
+  proposerId: zod.number(),
+  proposerDisplayName: zod.string(),
+  counterpartyId: zod.number(),
+  counterpartyDisplayName: zod.string(),
+  proposerListingId: zod.number(),
+  proposerListingTitle: zod.string(),
+  counterpartyListingId: zod.number().nullish(),
+  counterpartyListingTitle: zod.string().nullish(),
+  proposerHours: zod.number(),
+  counterpartyHours: zod.number(),
+  proposerSkillCategoryId: zod.number(),
+  proposerSkillCategoryName: zod.string(),
+  counterpartySkillCategoryId: zod.number(),
+  counterpartySkillCategoryName: zod.string(),
+  note: zod.string().nullish(),
+  status: zod.enum([
+    "proposed",
+    "accepted",
+    "declined",
+    "completed",
+    "cancelled",
+  ]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListSwapsResponse = zod.array(ListSwapsResponseItem);
+
+/**
+ * @summary Propose a time swap with another professional
+ */
+
+export const ProposeSwapBody = zod.object({
+  counterpartyId: zod.number(),
+  proposerListingId: zod.number(),
+  counterpartyListingId: zod.number().nullish(),
+  proposerHours: zod.number().min(1),
+  counterpartyHours: zod.number().min(1),
+  proposerSkillCategoryId: zod.number(),
+  counterpartySkillCategoryId: zod.number(),
+  note: zod.string().nullish(),
+});
+
+/**
+ * @summary Get a time swap by ID
+ */
+export const GetSwapParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetSwapResponse = zod.object({
+  id: zod.number(),
+  proposerId: zod.number(),
+  proposerDisplayName: zod.string(),
+  counterpartyId: zod.number(),
+  counterpartyDisplayName: zod.string(),
+  proposerListingId: zod.number(),
+  proposerListingTitle: zod.string(),
+  counterpartyListingId: zod.number().nullish(),
+  counterpartyListingTitle: zod.string().nullish(),
+  proposerHours: zod.number(),
+  counterpartyHours: zod.number(),
+  proposerSkillCategoryId: zod.number(),
+  proposerSkillCategoryName: zod.string(),
+  counterpartySkillCategoryId: zod.number(),
+  counterpartySkillCategoryName: zod.string(),
+  note: zod.string().nullish(),
+  status: zod.enum([
+    "proposed",
+    "accepted",
+    "declined",
+    "completed",
+    "cancelled",
+  ]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Accept a proposed swap
+ */
+export const AcceptSwapParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AcceptSwapResponse = zod.object({
+  id: zod.number(),
+  proposerId: zod.number(),
+  proposerDisplayName: zod.string(),
+  counterpartyId: zod.number(),
+  counterpartyDisplayName: zod.string(),
+  proposerListingId: zod.number(),
+  proposerListingTitle: zod.string(),
+  counterpartyListingId: zod.number().nullish(),
+  counterpartyListingTitle: zod.string().nullish(),
+  proposerHours: zod.number(),
+  counterpartyHours: zod.number(),
+  proposerSkillCategoryId: zod.number(),
+  proposerSkillCategoryName: zod.string(),
+  counterpartySkillCategoryId: zod.number(),
+  counterpartySkillCategoryName: zod.string(),
+  note: zod.string().nullish(),
+  status: zod.enum([
+    "proposed",
+    "accepted",
+    "declined",
+    "completed",
+    "cancelled",
+  ]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Decline a proposed swap
+ */
+export const DeclineSwapParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeclineSwapResponse = zod.object({
+  id: zod.number(),
+  proposerId: zod.number(),
+  proposerDisplayName: zod.string(),
+  counterpartyId: zod.number(),
+  counterpartyDisplayName: zod.string(),
+  proposerListingId: zod.number(),
+  proposerListingTitle: zod.string(),
+  counterpartyListingId: zod.number().nullish(),
+  counterpartyListingTitle: zod.string().nullish(),
+  proposerHours: zod.number(),
+  counterpartyHours: zod.number(),
+  proposerSkillCategoryId: zod.number(),
+  proposerSkillCategoryName: zod.string(),
+  counterpartySkillCategoryId: zod.number(),
+  counterpartySkillCategoryName: zod.string(),
+  note: zod.string().nullish(),
+  status: zod.enum([
+    "proposed",
+    "accepted",
+    "declined",
+    "completed",
+    "cancelled",
+  ]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Browse open time bundles
+ */
+export const listBundlesQueryLimitDefault = 20;
+export const listBundlesQueryOffsetDefault = 0;
+
+export const ListBundlesQueryParams = zod.object({
+  limit: zod.coerce.number().default(listBundlesQueryLimitDefault),
+  offset: zod.coerce.number().default(listBundlesQueryOffsetDefault),
+});
+
+export const ListBundlesResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      creatorId: zod.number(),
+      creatorDisplayName: zod.string(),
+      buyerId: zod.number().nullish(),
+      buyerDisplayName: zod.string().nullish(),
+      title: zod.string(),
+      description: zod.string().nullish(),
+      totalPriceCents: zod.number(),
+      status: zod.enum(["open", "sold", "cancelled"]),
+      items: zod.array(
+        zod.object({
+          id: zod.number(),
+          listingId: zod.number(),
+          listingTitle: zod.string(),
+          professionalId: zod.number(),
+          professionalDisplayName: zod.string(),
+          skillCategoryId: zod.number(),
+          skillCategoryName: zod.string(),
+          hours: zod.number(),
+        }),
+      ),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  total: zod.number(),
+  limit: zod.number(),
+  offset: zod.number(),
+});
+
+/**
+ * @summary Create a time bundle
+ */
+
+export const CreateBundleBody = zod.object({
+  title: zod.string(),
+  description: zod.string().nullish(),
+  totalPriceCents: zod.number().min(1),
+  items: zod
+    .array(
+      zod.object({
+        listingId: zod.number(),
+        hours: zod.number().min(1),
+      }),
+    )
+    .min(1),
+});
+
+/**
+ * @summary Get a bundle by ID
+ */
+export const GetBundleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetBundleResponse = zod.object({
+  id: zod.number(),
+  creatorId: zod.number(),
+  creatorDisplayName: zod.string(),
+  buyerId: zod.number().nullish(),
+  buyerDisplayName: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  totalPriceCents: zod.number(),
+  status: zod.enum(["open", "sold", "cancelled"]),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      listingId: zod.number(),
+      listingTitle: zod.string(),
+      professionalId: zod.number(),
+      professionalDisplayName: zod.string(),
+      skillCategoryId: zod.number(),
+      skillCategoryName: zod.string(),
+      hours: zod.number(),
+    }),
+  ),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Cancel a bundle
+ */
+export const CancelBundleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CancelBundleResponse = zod.object({
+  id: zod.number(),
+  creatorId: zod.number(),
+  creatorDisplayName: zod.string(),
+  buyerId: zod.number().nullish(),
+  buyerDisplayName: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  totalPriceCents: zod.number(),
+  status: zod.enum(["open", "sold", "cancelled"]),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      listingId: zod.number(),
+      listingTitle: zod.string(),
+      professionalId: zod.number(),
+      professionalDisplayName: zod.string(),
+      skillCategoryId: zod.number(),
+      skillCategoryName: zod.string(),
+      hours: zod.number(),
+    }),
+  ),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Purchase a bundle
+ */
+export const PurchaseBundleParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PurchaseBundleResponse = zod.object({
+  id: zod.number(),
+  creatorId: zod.number(),
+  creatorDisplayName: zod.string(),
+  buyerId: zod.number().nullish(),
+  buyerDisplayName: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  totalPriceCents: zod.number(),
+  status: zod.enum(["open", "sold", "cancelled"]),
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      listingId: zod.number(),
+      listingTitle: zod.string(),
+      professionalId: zod.number(),
+      professionalDisplayName: zod.string(),
+      skillCategoryId: zod.number(),
+      skillCategoryName: zod.string(),
+      hours: zod.number(),
+    }),
+  ),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Get the current user's full derivatives portfolio
+ */
+export const GetDerivativesPortfolioResponse = zod.object({
+  secondaryListings: zod.array(
+    zod.object({
+      id: zod.number(),
+      originalListingId: zod.number(),
+      originalListingTitle: zod.string(),
+      skillCategoryId: zod.number(),
+      skillCategoryName: zod.string(),
+      professionalDisplayName: zod.string(),
+      hoursPerWeek: zod.number(),
+      startDate: zod.coerce.date(),
+      endDate: zod.coerce.date(),
+      sellerId: zod.number(),
+      sellerDisplayName: zod.string(),
+      buyerId: zod.number().nullish(),
+      askPriceCents: zod.number(),
+      status: zod.enum(["open", "sold", "cancelled"]),
+      listedAt: zod.coerce.date(),
+      soldAt: zod.coerce.date().nullish(),
+    }),
+  ),
+  options: zod.array(
+    zod.object({
+      id: zod.number(),
+      professionalId: zod.number(),
+      professionalDisplayName: zod.string(),
+      skillCategoryId: zod.number(),
+      skillCategoryName: zod.string(),
+      hours: zod.number(),
+      windowStart: zod.coerce.date(),
+      windowEnd: zod.coerce.date(),
+      premiumCents: zod.number(),
+      fullRateCents: zod.number(),
+      holderId: zod.number().nullish(),
+      holderDisplayName: zod.string().nullish(),
+      status: zod.enum([
+        "open",
+        "purchased",
+        "exercised",
+        "expired",
+        "cancelled",
+      ]),
+      exercisedAt: zod.coerce.date().nullish(),
+      expiresAt: zod.coerce.date().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  swaps: zod.array(
+    zod.object({
+      id: zod.number(),
+      proposerId: zod.number(),
+      proposerDisplayName: zod.string(),
+      counterpartyId: zod.number(),
+      counterpartyDisplayName: zod.string(),
+      proposerListingId: zod.number(),
+      proposerListingTitle: zod.string(),
+      counterpartyListingId: zod.number().nullish(),
+      counterpartyListingTitle: zod.string().nullish(),
+      proposerHours: zod.number(),
+      counterpartyHours: zod.number(),
+      proposerSkillCategoryId: zod.number(),
+      proposerSkillCategoryName: zod.string(),
+      counterpartySkillCategoryId: zod.number(),
+      counterpartySkillCategoryName: zod.string(),
+      note: zod.string().nullish(),
+      status: zod.enum([
+        "proposed",
+        "accepted",
+        "declined",
+        "completed",
+        "cancelled",
+      ]),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+  bundles: zod.array(
+    zod.object({
+      id: zod.number(),
+      creatorId: zod.number(),
+      creatorDisplayName: zod.string(),
+      buyerId: zod.number().nullish(),
+      buyerDisplayName: zod.string().nullish(),
+      title: zod.string(),
+      description: zod.string().nullish(),
+      totalPriceCents: zod.number(),
+      status: zod.enum(["open", "sold", "cancelled"]),
+      items: zod.array(
+        zod.object({
+          id: zod.number(),
+          listingId: zod.number(),
+          listingTitle: zod.string(),
+          professionalId: zod.number(),
+          professionalDisplayName: zod.string(),
+          skillCategoryId: zod.number(),
+          skillCategoryName: zod.string(),
+          hours: zod.number(),
+        }),
+      ),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});

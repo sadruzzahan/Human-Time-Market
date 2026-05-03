@@ -35,6 +35,9 @@ export default function Navbar() {
             <Link href="/marketplace" className="text-muted-foreground transition-colors hover:text-foreground" data-testid="link-marketplace">
               Marketplace
             </Link>
+            <Link href="/secondary-market" className="text-muted-foreground transition-colors hover:text-foreground" data-testid="link-secondary-market">
+              Secondary
+            </Link>
             <Link href="/price-index" className="text-muted-foreground transition-colors hover:text-foreground" data-testid="link-price-index">
               Price Index
             </Link>

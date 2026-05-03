@@ -18,6 +18,8 @@ import Onboarding from "@/pages/onboarding";
 import ProfileMe from "@/pages/profile-me";
 import ProfileUser from "@/pages/profile-user";
 import ListingDetail from "@/pages/listing-detail";
+import SecondaryMarket from "@/pages/secondary-market";
+import Derivatives from "@/pages/derivatives";
 
 const queryClient = new QueryClient();
 
@@ -249,6 +251,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/marketplace" component={MarketplaceRoute} />
           <Route path="/listings/:listingId" component={ListingDetail} />
           <Route path="/price-index" component={PriceIndex} />
+          <Route path="/secondary-market" component={SecondaryMarket} />
           <Route path="/profile/:userId" component={ProfileUser} />
           
           <Route path="/onboarding" component={OnboardingRoute} />
@@ -257,6 +260,9 @@ function ClerkProviderWithRoutes() {
           </Route>
           <Route path="/profile/me">
             <ProtectedRoute component={ProfileMe} />
+          </Route>
+          <Route path="/derivatives">
+            <ProtectedRoute component={Derivatives} />
           </Route>
           
           <Route component={NotFound} />

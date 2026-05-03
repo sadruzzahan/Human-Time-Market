@@ -588,6 +588,219 @@ export interface RateHealthEntry {
   deltaPercent?: number | null;
 }
 
+export type SecondaryListingStatus =
+  (typeof SecondaryListingStatus)[keyof typeof SecondaryListingStatus];
+
+export const SecondaryListingStatus = {
+  open: "open",
+  sold: "sold",
+  cancelled: "cancelled",
+} as const;
+
+export type OptionStatus = (typeof OptionStatus)[keyof typeof OptionStatus];
+
+export const OptionStatus = {
+  open: "open",
+  purchased: "purchased",
+  exercised: "exercised",
+  expired: "expired",
+  cancelled: "cancelled",
+} as const;
+
+export type SwapStatus = (typeof SwapStatus)[keyof typeof SwapStatus];
+
+export const SwapStatus = {
+  proposed: "proposed",
+  accepted: "accepted",
+  declined: "declined",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export type BundleStatus = (typeof BundleStatus)[keyof typeof BundleStatus];
+
+export const BundleStatus = {
+  open: "open",
+  sold: "sold",
+  cancelled: "cancelled",
+} as const;
+
+export interface SecondaryListingDetail {
+  id: number;
+  originalListingId: number;
+  originalListingTitle: string;
+  skillCategoryId: number;
+  skillCategoryName: string;
+  professionalDisplayName: string;
+  hoursPerWeek: number;
+  startDate: string;
+  endDate: string;
+  sellerId: number;
+  sellerDisplayName: string;
+  /** @nullable */
+  buyerId?: number | null;
+  askPriceCents: number;
+  status: SecondaryListingStatus;
+  listedAt: string;
+  /** @nullable */
+  soldAt?: string | null;
+}
+
+export interface SecondaryListingsPage {
+  items: SecondaryListingDetail[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CreateSecondaryListingBody {
+  originalListingId: number;
+  /** @minimum 1 */
+  askPriceCents: number;
+}
+
+export interface TimeOptionDetail {
+  id: number;
+  professionalId: number;
+  professionalDisplayName: string;
+  skillCategoryId: number;
+  skillCategoryName: string;
+  hours: number;
+  windowStart: string;
+  windowEnd: string;
+  premiumCents: number;
+  fullRateCents: number;
+  /** @nullable */
+  holderId?: number | null;
+  /** @nullable */
+  holderDisplayName?: string | null;
+  status: OptionStatus;
+  /** @nullable */
+  exercisedAt?: string | null;
+  /** @nullable */
+  expiresAt?: string | null;
+  createdAt: string;
+}
+
+export interface OptionsPage {
+  items: TimeOptionDetail[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CreateOptionBody {
+  skillCategoryId: number;
+  /** @minimum 1 */
+  hours: number;
+  windowStart: string;
+  windowEnd: string;
+  /** @minimum 1 */
+  premiumCents: number;
+  /** @minimum 1 */
+  fullRateCents: number;
+  /** @nullable */
+  expiresAt?: string | null;
+}
+
+export interface TimeSwapDetail {
+  id: number;
+  proposerId: number;
+  proposerDisplayName: string;
+  counterpartyId: number;
+  counterpartyDisplayName: string;
+  proposerListingId: number;
+  proposerListingTitle: string;
+  /** @nullable */
+  counterpartyListingId?: number | null;
+  /** @nullable */
+  counterpartyListingTitle?: string | null;
+  proposerHours: number;
+  counterpartyHours: number;
+  proposerSkillCategoryId: number;
+  proposerSkillCategoryName: string;
+  counterpartySkillCategoryId: number;
+  counterpartySkillCategoryName: string;
+  /** @nullable */
+  note?: string | null;
+  status: SwapStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProposeSwapBody {
+  counterpartyId: number;
+  proposerListingId: number;
+  /** @nullable */
+  counterpartyListingId?: number | null;
+  /** @minimum 1 */
+  proposerHours: number;
+  /** @minimum 1 */
+  counterpartyHours: number;
+  proposerSkillCategoryId: number;
+  counterpartySkillCategoryId: number;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface BundleItemDetail {
+  id: number;
+  listingId: number;
+  listingTitle: string;
+  professionalId: number;
+  professionalDisplayName: string;
+  skillCategoryId: number;
+  skillCategoryName: string;
+  hours: number;
+}
+
+export interface BundleDetail {
+  id: number;
+  creatorId: number;
+  creatorDisplayName: string;
+  /** @nullable */
+  buyerId?: number | null;
+  /** @nullable */
+  buyerDisplayName?: string | null;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  totalPriceCents: number;
+  status: BundleStatus;
+  items: BundleItemDetail[];
+  createdAt: string;
+}
+
+export interface BundlesPage {
+  items: BundleDetail[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CreateBundleItemBody {
+  listingId: number;
+  /** @minimum 1 */
+  hours: number;
+}
+
+export interface CreateBundleBody {
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  /** @minimum 1 */
+  totalPriceCents: number;
+  /** @minItems 1 */
+  items: CreateBundleItemBody[];
+}
+
+export interface DerivativesPortfolio {
+  secondaryListings: SecondaryListingDetail[];
+  options: TimeOptionDetail[];
+  swaps: TimeSwapDetail[];
+  bundles: BundleDetail[];
+}
+
 export type ListListingsParams = {
   skillCategoryId?: number;
   listingType?: ListingType;
@@ -605,6 +818,23 @@ export type ListListingsParams = {
 export type ListRfpsParams = {
   skillCategoryId?: number;
   status?: RfpStatus;
+  limit?: number;
+  offset?: number;
+};
+
+export type ListSecondaryListingsParams = {
+  skillCategoryId?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type ListOptionsParams = {
+  skillCategoryId?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type ListBundlesParams = {
   limit?: number;
   offset?: number;
 };
