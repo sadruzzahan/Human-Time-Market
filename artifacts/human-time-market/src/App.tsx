@@ -17,6 +17,7 @@ import Dashboard from "@/pages/dashboard";
 import Onboarding from "@/pages/onboarding";
 import ProfileMe from "@/pages/profile-me";
 import ProfileUser from "@/pages/profile-user";
+import ListingDetail from "@/pages/listing-detail";
 
 const queryClient = new QueryClient();
 
@@ -116,11 +117,14 @@ function ClerkQueryClientCacheInvalidator() {
   useEffect(() => {
     const unsubscribe = addListener(({ user }) => {
       const userId = user?.id ?? null;
-      if (
-        prevUserIdRef.current !== undefined &&
-        prevUserIdRef.current !== userId
-      ) {
-        qc.clear();
+      const prevId = prevUserIdRef.current;
+      if (prevId !== undefined && prevId !== userId) {
+        // Clear cache only on sign-out or user-switch — not on initial sign-in
+        // (null → userId). Clearing on sign-in causes a render loop because
+        // Clerk fires multiple rapid events during programmatic auth.
+        if (userId === null || (prevId !== null && prevId !== userId)) {
+          qc.clear();
+        }
       }
       prevUserIdRef.current = userId;
     });
@@ -195,6 +199,20 @@ function OnboardingRoute() {
   );
 }
 
+// Marketplace is publicly browsable but if the user is signed in and hasn't
+// completed onboarding yet, redirect them there so a user row is created and
+// their profile is configured before they try to transact.
+function MarketplaceRoute() {
+  const { isSignedIn, isAuthLoaded, isProfileLoaded, isOnboarded } = useOnboardingStatus();
+  // While Clerk is initialising, don't block the page from rendering
+  if (!isAuthLoaded || !isSignedIn) return <Marketplace />;
+  // Profile loading: still show the page (it'll show a loading skeleton)
+  if (!isProfileLoaded) return <Marketplace />;
+  // Signed in but never completed onboarding
+  if (!isOnboarded) return <Redirect to="/onboarding" />;
+  return <Marketplace />;
+}
+
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
 
@@ -228,7 +246,8 @@ function ClerkProviderWithRoutes() {
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
-          <Route path="/marketplace" component={Marketplace} />
+          <Route path="/marketplace" component={MarketplaceRoute} />
+          <Route path="/listings/:listingId" component={ListingDetail} />
           <Route path="/price-index" component={PriceIndex} />
           <Route path="/profile/:userId" component={ProfileUser} />
           

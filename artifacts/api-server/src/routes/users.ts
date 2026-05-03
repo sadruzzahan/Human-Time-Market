@@ -57,14 +57,17 @@ async function loadUserAndProfile(clerkId: string): Promise<{ user: User; profil
   return { user, profile: profile ?? null };
 }
 
-// GET /users/me
+// GET /users/me — auto-creates a minimal user row on first access so we always return 200
 router.get("/users/me", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   try {
-    const found = await loadUserAndProfile(clerkId);
+    let found = await loadUserAndProfile(clerkId);
     if (!found) {
-      res.status(404).json({ error: "Profile not found" });
-      return;
+      const [newUser] = await db
+        .insert(users)
+        .values({ clerkId, displayName: "" })
+        .returning();
+      found = { user: newUser, profile: null };
     }
     res.json(flattenProfile(found.user, found.profile));
   } catch (err) {

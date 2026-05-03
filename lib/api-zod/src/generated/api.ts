@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Human Time Market API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import * as zod from "zod";
 
@@ -152,4 +152,593 @@ export const GetSkillCategoryResponse = zod.object({
       parentId: zod.number().nullish(),
     }),
   ),
+});
+
+/**
+ * @summary Browse marketplace listings with filters
+ */
+export const listListingsQueryLimitDefault = 20;
+export const listListingsQueryOffsetDefault = 0;
+
+export const ListListingsQueryParams = zod.object({
+  skillCategoryId: zod.coerce.number().optional(),
+  listingType: zod.enum(["fixed_rate", "auction", "emergency"]).optional(),
+  status: zod
+    .enum(["open", "in_bidding", "committed", "completed", "cancelled"])
+    .optional(),
+  minRateCents: zod.coerce.number().optional(),
+  maxRateCents: zod.coerce.number().optional(),
+  startDateAfter: zod.date().optional(),
+  experienceLevel: zod
+    .enum(["junior", "mid", "senior", "principal", "expert"])
+    .optional(),
+  timezone: zod.coerce.string().optional(),
+  limit: zod.coerce.number().default(listListingsQueryLimitDefault),
+  offset: zod.coerce.number().default(listListingsQueryOffsetDefault),
+});
+
+export const ListListingsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      skillCategoryId: zod.number(),
+      skillCategoryName: zod.string(),
+      skillCategoryParentName: zod.string().nullish(),
+      hoursPerWeek: zod.number(),
+      startDate: zod.coerce.date(),
+      endDate: zod.coerce.date(),
+      listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
+      rateCents: zod.number(),
+      status: zod.enum([
+        "open",
+        "in_bidding",
+        "committed",
+        "completed",
+        "cancelled",
+      ]),
+      professionalId: zod.number(),
+      professionalDisplayName: zod.string(),
+      professionalExperienceLevel: zod.enum([
+        "junior",
+        "mid",
+        "senior",
+        "principal",
+        "expert",
+      ]),
+      professionalTimezone: zod.string().nullish(),
+      bidCount: zod.number(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  total: zod.number(),
+  limit: zod.number(),
+  offset: zod.number(),
+});
+
+/**
+ * @summary Create a new time listing
+ */
+export const CreateListingBody = zod.object({
+  title: zod.string(),
+  description: zod.string().nullish(),
+  skillCategoryId: zod.number(),
+  hoursPerWeek: zod.number(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
+  rateCents: zod.number(),
+});
+
+/**
+ * @summary Get listing detail including bids and professional profile
+ */
+export const GetListingParams = zod.object({
+  listingId: zod.coerce.number(),
+});
+
+export const GetListingResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  skillCategoryParentName: zod.string().nullish(),
+  hoursPerWeek: zod.number(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
+  rateCents: zod.number(),
+  status: zod.enum([
+    "open",
+    "in_bidding",
+    "committed",
+    "completed",
+    "cancelled",
+  ]),
+  professionalId: zod.number(),
+  professionalClerkId: zod.string(),
+  professionalDisplayName: zod.string(),
+  professionalExperienceLevel: zod.enum([
+    "junior",
+    "mid",
+    "senior",
+    "principal",
+    "expert",
+  ]),
+  professionalTimezone: zod.string().nullish(),
+  professionalBio: zod.string().nullish(),
+  bids: zod.array(
+    zod.object({
+      id: zod.number(),
+      listingId: zod.number(),
+      bidderId: zod.number(),
+      bidderDisplayName: zod.string(),
+      bidderClerkId: zod.string(),
+      bidRateCents: zod.number(),
+      message: zod.string().nullish(),
+      status: zod.enum(["pending", "accepted", "rejected", "withdrawn"]),
+      placedAt: zod.coerce.date(),
+    }),
+  ),
+  escrow: zod
+    .union([
+      zod.object({
+        id: zod.number(),
+        listingId: zod.number(),
+        buyerId: zod.number(),
+        professionalId: zod.number(),
+        amountCents: zod.number(),
+        status: zod.enum(["pending_payment", "held", "released", "refunded"]),
+        createdAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update a listing (owner only)
+ */
+export const UpdateListingParams = zod.object({
+  listingId: zod.coerce.number(),
+});
+
+export const UpdateListingBody = zod.object({
+  title: zod.string().optional(),
+  description: zod.string().nullish(),
+  hoursPerWeek: zod.number().optional(),
+  startDate: zod.coerce.date().optional(),
+  endDate: zod.coerce.date().optional(),
+  rateCents: zod.number().optional(),
+});
+
+export const UpdateListingResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  skillCategoryParentName: zod.string().nullish(),
+  hoursPerWeek: zod.number(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
+  rateCents: zod.number(),
+  status: zod.enum([
+    "open",
+    "in_bidding",
+    "committed",
+    "completed",
+    "cancelled",
+  ]),
+  professionalId: zod.number(),
+  professionalClerkId: zod.string(),
+  professionalDisplayName: zod.string(),
+  professionalExperienceLevel: zod.enum([
+    "junior",
+    "mid",
+    "senior",
+    "principal",
+    "expert",
+  ]),
+  professionalTimezone: zod.string().nullish(),
+  professionalBio: zod.string().nullish(),
+  bids: zod.array(
+    zod.object({
+      id: zod.number(),
+      listingId: zod.number(),
+      bidderId: zod.number(),
+      bidderDisplayName: zod.string(),
+      bidderClerkId: zod.string(),
+      bidRateCents: zod.number(),
+      message: zod.string().nullish(),
+      status: zod.enum(["pending", "accepted", "rejected", "withdrawn"]),
+      placedAt: zod.coerce.date(),
+    }),
+  ),
+  escrow: zod
+    .union([
+      zod.object({
+        id: zod.number(),
+        listingId: zod.number(),
+        buyerId: zod.number(),
+        professionalId: zod.number(),
+        amountCents: zod.number(),
+        status: zod.enum(["pending_payment", "held", "released", "refunded"]),
+        createdAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Cancel/delete a listing (owner only, must be open)
+ */
+export const DeleteListingParams = zod.object({
+  listingId: zod.coerce.number(),
+});
+
+/**
+ * @summary Book a fixed-rate listing (transitions to committed + creates escrow stub)
+ */
+export const BookListingParams = zod.object({
+  listingId: zod.coerce.number(),
+});
+
+export const BookListingResponse = zod.object({
+  listing: zod.object({
+    id: zod.number(),
+    title: zod.string(),
+    description: zod.string().nullish(),
+    skillCategoryId: zod.number(),
+    skillCategoryName: zod.string(),
+    skillCategoryParentName: zod.string().nullish(),
+    hoursPerWeek: zod.number(),
+    startDate: zod.coerce.date(),
+    endDate: zod.coerce.date(),
+    listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
+    rateCents: zod.number(),
+    status: zod.enum([
+      "open",
+      "in_bidding",
+      "committed",
+      "completed",
+      "cancelled",
+    ]),
+    professionalId: zod.number(),
+    professionalClerkId: zod.string(),
+    professionalDisplayName: zod.string(),
+    professionalExperienceLevel: zod.enum([
+      "junior",
+      "mid",
+      "senior",
+      "principal",
+      "expert",
+    ]),
+    professionalTimezone: zod.string().nullish(),
+    professionalBio: zod.string().nullish(),
+    bids: zod.array(
+      zod.object({
+        id: zod.number(),
+        listingId: zod.number(),
+        bidderId: zod.number(),
+        bidderDisplayName: zod.string(),
+        bidderClerkId: zod.string(),
+        bidRateCents: zod.number(),
+        message: zod.string().nullish(),
+        status: zod.enum(["pending", "accepted", "rejected", "withdrawn"]),
+        placedAt: zod.coerce.date(),
+      }),
+    ),
+    escrow: zod
+      .union([
+        zod.object({
+          id: zod.number(),
+          listingId: zod.number(),
+          buyerId: zod.number(),
+          professionalId: zod.number(),
+          amountCents: zod.number(),
+          status: zod.enum(["pending_payment", "held", "released", "refunded"]),
+          createdAt: zod.coerce.date(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  }),
+  escrow: zod.object({
+    id: zod.number(),
+    listingId: zod.number(),
+    buyerId: zod.number(),
+    professionalId: zod.number(),
+    amountCents: zod.number(),
+    status: zod.enum(["pending_payment", "held", "released", "refunded"]),
+    createdAt: zod.coerce.date(),
+  }),
+});
+
+/**
+ * @summary List all bids on a listing
+ */
+export const ListBidsParams = zod.object({
+  listingId: zod.coerce.number(),
+});
+
+export const ListBidsResponseItem = zod.object({
+  id: zod.number(),
+  listingId: zod.number(),
+  bidderId: zod.number(),
+  bidderDisplayName: zod.string(),
+  bidderClerkId: zod.string(),
+  bidRateCents: zod.number(),
+  message: zod.string().nullish(),
+  status: zod.enum(["pending", "accepted", "rejected", "withdrawn"]),
+  placedAt: zod.coerce.date(),
+});
+export const ListBidsResponse = zod.array(ListBidsResponseItem);
+
+/**
+ * @summary Place a bid on an auction listing
+ */
+export const PlaceBidParams = zod.object({
+  listingId: zod.coerce.number(),
+});
+
+export const PlaceBidBody = zod.object({
+  bidRateCents: zod.number(),
+  message: zod.string().nullish(),
+});
+
+/**
+ * @summary Accept a bid (listing owner only, transitions listing to committed)
+ */
+export const AcceptBidParams = zod.object({
+  listingId: zod.coerce.number(),
+  bidId: zod.coerce.number(),
+});
+
+export const AcceptBidResponse = zod.object({
+  listing: zod.object({
+    id: zod.number(),
+    title: zod.string(),
+    description: zod.string().nullish(),
+    skillCategoryId: zod.number(),
+    skillCategoryName: zod.string(),
+    skillCategoryParentName: zod.string().nullish(),
+    hoursPerWeek: zod.number(),
+    startDate: zod.coerce.date(),
+    endDate: zod.coerce.date(),
+    listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
+    rateCents: zod.number(),
+    status: zod.enum([
+      "open",
+      "in_bidding",
+      "committed",
+      "completed",
+      "cancelled",
+    ]),
+    professionalId: zod.number(),
+    professionalClerkId: zod.string(),
+    professionalDisplayName: zod.string(),
+    professionalExperienceLevel: zod.enum([
+      "junior",
+      "mid",
+      "senior",
+      "principal",
+      "expert",
+    ]),
+    professionalTimezone: zod.string().nullish(),
+    professionalBio: zod.string().nullish(),
+    bids: zod.array(
+      zod.object({
+        id: zod.number(),
+        listingId: zod.number(),
+        bidderId: zod.number(),
+        bidderDisplayName: zod.string(),
+        bidderClerkId: zod.string(),
+        bidRateCents: zod.number(),
+        message: zod.string().nullish(),
+        status: zod.enum(["pending", "accepted", "rejected", "withdrawn"]),
+        placedAt: zod.coerce.date(),
+      }),
+    ),
+    escrow: zod
+      .union([
+        zod.object({
+          id: zod.number(),
+          listingId: zod.number(),
+          buyerId: zod.number(),
+          professionalId: zod.number(),
+          amountCents: zod.number(),
+          status: zod.enum(["pending_payment", "held", "released", "refunded"]),
+          createdAt: zod.coerce.date(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  }),
+  escrow: zod.object({
+    id: zod.number(),
+    listingId: zod.number(),
+    buyerId: zod.number(),
+    professionalId: zod.number(),
+    amountCents: zod.number(),
+    status: zod.enum(["pending_payment", "held", "released", "refunded"]),
+    createdAt: zod.coerce.date(),
+  }),
+});
+
+/**
+ * @summary Get current user's own listings
+ */
+export const GetMyListingsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  skillCategoryParentName: zod.string().nullish(),
+  hoursPerWeek: zod.number(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
+  rateCents: zod.number(),
+  status: zod.enum([
+    "open",
+    "in_bidding",
+    "committed",
+    "completed",
+    "cancelled",
+  ]),
+  professionalId: zod.number(),
+  professionalClerkId: zod.string(),
+  professionalDisplayName: zod.string(),
+  professionalExperienceLevel: zod.enum([
+    "junior",
+    "mid",
+    "senior",
+    "principal",
+    "expert",
+  ]),
+  professionalTimezone: zod.string().nullish(),
+  professionalBio: zod.string().nullish(),
+  bids: zod.array(
+    zod.object({
+      id: zod.number(),
+      listingId: zod.number(),
+      bidderId: zod.number(),
+      bidderDisplayName: zod.string(),
+      bidderClerkId: zod.string(),
+      bidRateCents: zod.number(),
+      message: zod.string().nullish(),
+      status: zod.enum(["pending", "accepted", "rejected", "withdrawn"]),
+      placedAt: zod.coerce.date(),
+    }),
+  ),
+  escrow: zod
+    .union([
+      zod.object({
+        id: zod.number(),
+        listingId: zod.number(),
+        buyerId: zod.number(),
+        professionalId: zod.number(),
+        amountCents: zod.number(),
+        status: zod.enum(["pending_payment", "held", "released", "refunded"]),
+        createdAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const GetMyListingsResponse = zod.array(GetMyListingsResponseItem);
+
+/**
+ * @summary Browse open RFPs
+ */
+export const listRfpsQueryLimitDefault = 20;
+export const listRfpsQueryOffsetDefault = 0;
+
+export const ListRfpsQueryParams = zod.object({
+  skillCategoryId: zod.coerce.number().optional(),
+  status: zod.enum(["open", "closed", "fulfilled"]).optional(),
+  limit: zod.coerce.number().default(listRfpsQueryLimitDefault),
+  offset: zod.coerce.number().default(listRfpsQueryOffsetDefault),
+});
+
+export const ListRfpsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      skillCategoryId: zod.number(),
+      skillCategoryName: zod.string(),
+      skillCategoryParentName: zod.string().nullish(),
+      budgetMinCents: zod.number(),
+      budgetMaxCents: zod.number(),
+      hoursNeeded: zod.number(),
+      deadline: zod.coerce.date(),
+      status: zod.enum(["open", "closed", "fulfilled"]),
+      buyerId: zod.number(),
+      buyerDisplayName: zod.string(),
+      responseCount: zod.number(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  total: zod.number(),
+  limit: zod.number(),
+  offset: zod.number(),
+});
+
+/**
+ * @summary Post a new RFP
+ */
+export const CreateRfpBody = zod.object({
+  title: zod.string(),
+  description: zod.string(),
+  skillCategoryId: zod.number(),
+  budgetMinCents: zod.number(),
+  budgetMaxCents: zod.number(),
+  hoursNeeded: zod.number(),
+  deadline: zod.coerce.date(),
+});
+
+/**
+ * @summary Get RFP detail with responses
+ */
+export const GetRfpParams = zod.object({
+  rfpId: zod.coerce.number(),
+});
+
+export const GetRfpResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  description: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  skillCategoryParentName: zod.string().nullish(),
+  budgetMinCents: zod.number(),
+  budgetMaxCents: zod.number(),
+  hoursNeeded: zod.number(),
+  deadline: zod.coerce.date(),
+  status: zod.enum(["open", "closed", "fulfilled"]),
+  buyerId: zod.number(),
+  buyerDisplayName: zod.string(),
+  responses: zod.array(
+    zod.object({
+      id: zod.number(),
+      rfpId: zod.number(),
+      professionalId: zod.number(),
+      professionalDisplayName: zod.string(),
+      professionalClerkId: zod.string(),
+      proposedRateCents: zod.number(),
+      message: zod.string(),
+      status: zod.enum(["submitted", "accepted", "rejected", "withdrawn"]),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Submit a response to an RFP
+ */
+export const RespondToRfpParams = zod.object({
+  rfpId: zod.coerce.number(),
+});
+
+export const RespondToRfpBody = zod.object({
+  proposedRateCents: zod.number(),
+  message: zod.string(),
 });

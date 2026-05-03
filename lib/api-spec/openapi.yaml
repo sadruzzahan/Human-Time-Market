@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
+  version: 0.2.0
   description: Human Time Market API
 servers:
   - url: /api
@@ -14,6 +14,12 @@ tags:
     description: User and profile operations
   - name: skill-categories
     description: Skill category taxonomy
+  - name: listings
+    description: Time commitment listings
+  - name: bids
+    description: Bid management
+  - name: rfps
+    description: Requests for Professionals
 paths:
   /healthz:
     get:
@@ -163,6 +169,385 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /listings:
+    get:
+      operationId: listListings
+      tags: [listings]
+      summary: Browse marketplace listings with filters
+      parameters:
+        - name: skillCategoryId
+          in: query
+          schema:
+            type: integer
+        - name: listingType
+          in: query
+          schema:
+            $ref: "#/components/schemas/ListingType"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ListingStatus"
+        - name: minRateCents
+          in: query
+          schema:
+            type: integer
+        - name: maxRateCents
+          in: query
+          schema:
+            type: integer
+        - name: startDateAfter
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: experienceLevel
+          in: query
+          schema:
+            $ref: "#/components/schemas/ExperienceLevel"
+        - name: timezone
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of listings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingsPage"
+
+    post:
+      operationId: createListing
+      tags: [listings]
+      summary: Create a new time listing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateListingBody"
+      responses:
+        "201":
+          description: Created listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /listings/{listingId}:
+    get:
+      operationId: getListing
+      tags: [listings]
+      summary: Get listing detail including bids and professional profile
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Listing detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateListing
+      tags: [listings]
+      summary: Update a listing (owner only)
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateListingBody"
+      responses:
+        "200":
+          description: Updated listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingDetail"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteListing
+      tags: [listings]
+      summary: Cancel/delete a listing (owner only, must be open)
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /listings/{listingId}/book:
+    post:
+      operationId: bookListing
+      tags: [listings]
+      summary: Book a fixed-rate listing (transitions to committed + creates escrow stub)
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingConfirmation"
+        "400":
+          description: Cannot book
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /listings/{listingId}/bids:
+    get:
+      operationId: listBids
+      tags: [bids]
+      summary: List all bids on a listing
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of bids
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BidDetail"
+    post:
+      operationId: placeBid
+      tags: [bids]
+      summary: Place a bid on an auction listing
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceBidBody"
+      responses:
+        "201":
+          description: Bid placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BidDetail"
+        "400":
+          description: Cannot bid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /listings/{listingId}/bids/{bidId}/accept:
+    post:
+      operationId: acceptBid
+      tags: [bids]
+      summary: Accept a bid (listing owner only, transitions listing to committed)
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: bidId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bid accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingConfirmation"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /listings/me:
+    get:
+      operationId: getMyListings
+      tags: [listings]
+      summary: Get current user's own listings
+      responses:
+        "200":
+          description: User's listings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ListingDetail"
+
+  /rfps:
+    get:
+      operationId: listRfps
+      tags: [rfps]
+      summary: Browse open RFPs
+      parameters:
+        - name: skillCategoryId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/RfpStatus"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of RFPs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RfpsPage"
+    post:
+      operationId: createRfp
+      tags: [rfps]
+      summary: Post a new RFP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRfpBody"
+      responses:
+        "201":
+          description: Created RFP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RfpDetail"
+
+  /rfps/{rfpId}:
+    get:
+      operationId: getRfp
+      tags: [rfps]
+      summary: Get RFP detail with responses
+      parameters:
+        - name: rfpId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: RFP detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RfpDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /rfps/{rfpId}/responses:
+    post:
+      operationId: respondToRfp
+      tags: [rfps]
+      summary: Submit a response to an RFP
+      parameters:
+        - name: rfpId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRfpResponseBody"
+      responses:
+        "201":
+          description: Response submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RfpResponseDetail"
+        "400":
+          description: Cannot respond
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -184,6 +569,30 @@ components:
     ExperienceLevel:
       type: string
       enum: [junior, mid, senior, principal, expert]
+
+    ListingType:
+      type: string
+      enum: [fixed_rate, auction, emergency]
+
+    ListingStatus:
+      type: string
+      enum: [open, in_bidding, committed, completed, cancelled]
+
+    BidStatus:
+      type: string
+      enum: [pending, accepted, rejected, withdrawn]
+
+    RfpStatus:
+      type: string
+      enum: [open, closed, fulfilled]
+
+    RfpResponseStatus:
+      type: string
+      enum: [submitted, accepted, rejected, withdrawn]
+
+    EscrowStatus:
+      type: string
+      enum: [pending_payment, held, released, refunded]
 
     UserProfile:
       type: object
@@ -323,3 +732,476 @@ components:
         - id
         - name
         - slug
+
+    ListingSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        skillCategoryParentName:
+          type: ["string", "null"]
+        hoursPerWeek:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        listingType:
+          $ref: "#/components/schemas/ListingType"
+        rateCents:
+          type: integer
+        status:
+          $ref: "#/components/schemas/ListingStatus"
+        professionalId:
+          type: integer
+        professionalDisplayName:
+          type: string
+        professionalExperienceLevel:
+          $ref: "#/components/schemas/ExperienceLevel"
+        professionalTimezone:
+          type: ["string", "null"]
+        bidCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - skillCategoryId
+        - skillCategoryName
+        - hoursPerWeek
+        - startDate
+        - endDate
+        - listingType
+        - rateCents
+        - status
+        - professionalId
+        - professionalDisplayName
+        - professionalExperienceLevel
+        - bidCount
+        - createdAt
+
+    ListingDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        skillCategoryParentName:
+          type: ["string", "null"]
+        hoursPerWeek:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        listingType:
+          $ref: "#/components/schemas/ListingType"
+        rateCents:
+          type: integer
+        status:
+          $ref: "#/components/schemas/ListingStatus"
+        professionalId:
+          type: integer
+        professionalClerkId:
+          type: string
+        professionalDisplayName:
+          type: string
+        professionalExperienceLevel:
+          $ref: "#/components/schemas/ExperienceLevel"
+        professionalTimezone:
+          type: ["string", "null"]
+        professionalBio:
+          type: ["string", "null"]
+        bids:
+          type: array
+          items:
+            $ref: "#/components/schemas/BidDetail"
+        escrow:
+          oneOf:
+            - $ref: "#/components/schemas/EscrowRecord"
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - skillCategoryId
+        - skillCategoryName
+        - hoursPerWeek
+        - startDate
+        - endDate
+        - listingType
+        - rateCents
+        - status
+        - professionalId
+        - professionalClerkId
+        - professionalDisplayName
+        - professionalExperienceLevel
+        - bids
+        - createdAt
+        - updatedAt
+
+    ListingsPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ListingSummary"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - items
+        - total
+        - limit
+        - offset
+
+    CreateListingBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        skillCategoryId:
+          type: integer
+        hoursPerWeek:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        listingType:
+          $ref: "#/components/schemas/ListingType"
+        rateCents:
+          type: integer
+      required:
+        - title
+        - skillCategoryId
+        - hoursPerWeek
+        - startDate
+        - endDate
+        - listingType
+        - rateCents
+
+    UpdateListingBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        hoursPerWeek:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        rateCents:
+          type: integer
+
+    BidDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        listingId:
+          type: integer
+        bidderId:
+          type: integer
+        bidderDisplayName:
+          type: string
+        bidderClerkId:
+          type: string
+        bidRateCents:
+          type: integer
+        message:
+          type: ["string", "null"]
+        status:
+          $ref: "#/components/schemas/BidStatus"
+        placedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - listingId
+        - bidderId
+        - bidderDisplayName
+        - bidderClerkId
+        - bidRateCents
+        - status
+        - placedAt
+
+    PlaceBidBody:
+      type: object
+      properties:
+        bidRateCents:
+          type: integer
+        message:
+          type: ["string", "null"]
+      required:
+        - bidRateCents
+
+    EscrowRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        listingId:
+          type: integer
+        buyerId:
+          type: integer
+        professionalId:
+          type: integer
+        amountCents:
+          type: integer
+        status:
+          $ref: "#/components/schemas/EscrowStatus"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - listingId
+        - buyerId
+        - professionalId
+        - amountCents
+        - status
+        - createdAt
+
+    BookingConfirmation:
+      type: object
+      properties:
+        listing:
+          $ref: "#/components/schemas/ListingDetail"
+        escrow:
+          $ref: "#/components/schemas/EscrowRecord"
+      required:
+        - listing
+        - escrow
+
+    RfpSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        skillCategoryParentName:
+          type: ["string", "null"]
+        budgetMinCents:
+          type: integer
+        budgetMaxCents:
+          type: integer
+        hoursNeeded:
+          type: integer
+        deadline:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/RfpStatus"
+        buyerId:
+          type: integer
+        buyerDisplayName:
+          type: string
+        responseCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - skillCategoryId
+        - skillCategoryName
+        - budgetMinCents
+        - budgetMaxCents
+        - hoursNeeded
+        - deadline
+        - status
+        - buyerId
+        - buyerDisplayName
+        - responseCount
+        - createdAt
+
+    RfpDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        skillCategoryParentName:
+          type: ["string", "null"]
+        budgetMinCents:
+          type: integer
+        budgetMaxCents:
+          type: integer
+        hoursNeeded:
+          type: integer
+        deadline:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/RfpStatus"
+        buyerId:
+          type: integer
+        buyerDisplayName:
+          type: string
+        responses:
+          type: array
+          items:
+            $ref: "#/components/schemas/RfpResponseDetail"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - description
+        - skillCategoryId
+        - skillCategoryName
+        - budgetMinCents
+        - budgetMaxCents
+        - hoursNeeded
+        - deadline
+        - status
+        - buyerId
+        - buyerDisplayName
+        - responses
+        - createdAt
+        - updatedAt
+
+    RfpsPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RfpSummary"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - items
+        - total
+        - limit
+        - offset
+
+    CreateRfpBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        skillCategoryId:
+          type: integer
+        budgetMinCents:
+          type: integer
+        budgetMaxCents:
+          type: integer
+        hoursNeeded:
+          type: integer
+        deadline:
+          type: string
+          format: date
+      required:
+        - title
+        - description
+        - skillCategoryId
+        - budgetMinCents
+        - budgetMaxCents
+        - hoursNeeded
+        - deadline
+
+    RfpResponseDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        rfpId:
+          type: integer
+        professionalId:
+          type: integer
+        professionalDisplayName:
+          type: string
+        professionalClerkId:
+          type: string
+        proposedRateCents:
+          type: integer
+        message:
+          type: string
+        status:
+          $ref: "#/components/schemas/RfpResponseStatus"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - rfpId
+        - professionalId
+        - professionalDisplayName
+        - professionalClerkId
+        - proposedRateCents
+        - message
+        - status
+        - createdAt
+
+    CreateRfpResponseBody:
+      type: object
+      properties:
+        proposedRateCents:
+          type: integer
+        message:
+          type: string
+      required:
+        - proposedRateCents
+        - message

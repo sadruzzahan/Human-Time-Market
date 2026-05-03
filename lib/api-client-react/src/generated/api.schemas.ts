@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Human Time Market API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 export interface HealthStatus {
   status: string;
@@ -22,6 +22,60 @@ export const ExperienceLevel = {
   senior: "senior",
   principal: "principal",
   expert: "expert",
+} as const;
+
+export type ListingType = (typeof ListingType)[keyof typeof ListingType];
+
+export const ListingType = {
+  fixed_rate: "fixed_rate",
+  auction: "auction",
+  emergency: "emergency",
+} as const;
+
+export type ListingStatus = (typeof ListingStatus)[keyof typeof ListingStatus];
+
+export const ListingStatus = {
+  open: "open",
+  in_bidding: "in_bidding",
+  committed: "committed",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export type BidStatus = (typeof BidStatus)[keyof typeof BidStatus];
+
+export const BidStatus = {
+  pending: "pending",
+  accepted: "accepted",
+  rejected: "rejected",
+  withdrawn: "withdrawn",
+} as const;
+
+export type RfpStatus = (typeof RfpStatus)[keyof typeof RfpStatus];
+
+export const RfpStatus = {
+  open: "open",
+  closed: "closed",
+  fulfilled: "fulfilled",
+} as const;
+
+export type RfpResponseStatus =
+  (typeof RfpResponseStatus)[keyof typeof RfpResponseStatus];
+
+export const RfpResponseStatus = {
+  submitted: "submitted",
+  accepted: "accepted",
+  rejected: "rejected",
+  withdrawn: "withdrawn",
+} as const;
+
+export type EscrowStatus = (typeof EscrowStatus)[keyof typeof EscrowStatus];
+
+export const EscrowStatus = {
+  pending_payment: "pending_payment",
+  held: "held",
+  released: "released",
+  refunded: "refunded",
 } as const;
 
 export interface UserProfile {
@@ -92,3 +146,209 @@ export interface UserSkill {
   /** @nullable */
   parentName?: string | null;
 }
+
+export interface ListingSummary {
+  id: number;
+  title: string;
+  skillCategoryId: number;
+  skillCategoryName: string;
+  /** @nullable */
+  skillCategoryParentName?: string | null;
+  hoursPerWeek: number;
+  startDate: string;
+  endDate: string;
+  listingType: ListingType;
+  rateCents: number;
+  status: ListingStatus;
+  professionalId: number;
+  professionalDisplayName: string;
+  professionalExperienceLevel: ExperienceLevel;
+  /** @nullable */
+  professionalTimezone?: string | null;
+  bidCount: number;
+  createdAt: string;
+}
+
+export interface BidDetail {
+  id: number;
+  listingId: number;
+  bidderId: number;
+  bidderDisplayName: string;
+  bidderClerkId: string;
+  bidRateCents: number;
+  /** @nullable */
+  message?: string | null;
+  status: BidStatus;
+  placedAt: string;
+}
+
+export interface EscrowRecord {
+  id: number;
+  listingId: number;
+  buyerId: number;
+  professionalId: number;
+  amountCents: number;
+  status: EscrowStatus;
+  createdAt: string;
+}
+
+export interface ListingDetail {
+  id: number;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  skillCategoryId: number;
+  skillCategoryName: string;
+  /** @nullable */
+  skillCategoryParentName?: string | null;
+  hoursPerWeek: number;
+  startDate: string;
+  endDate: string;
+  listingType: ListingType;
+  rateCents: number;
+  status: ListingStatus;
+  professionalId: number;
+  professionalClerkId: string;
+  professionalDisplayName: string;
+  professionalExperienceLevel: ExperienceLevel;
+  /** @nullable */
+  professionalTimezone?: string | null;
+  /** @nullable */
+  professionalBio?: string | null;
+  bids: BidDetail[];
+  escrow?: EscrowRecord | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListingsPage {
+  items: ListingSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CreateListingBody {
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  skillCategoryId: number;
+  hoursPerWeek: number;
+  startDate: string;
+  endDate: string;
+  listingType: ListingType;
+  rateCents: number;
+}
+
+export interface UpdateListingBody {
+  title?: string;
+  /** @nullable */
+  description?: string | null;
+  hoursPerWeek?: number;
+  startDate?: string;
+  endDate?: string;
+  rateCents?: number;
+}
+
+export interface PlaceBidBody {
+  bidRateCents: number;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface BookingConfirmation {
+  listing: ListingDetail;
+  escrow: EscrowRecord;
+}
+
+export interface RfpSummary {
+  id: number;
+  title: string;
+  skillCategoryId: number;
+  skillCategoryName: string;
+  /** @nullable */
+  skillCategoryParentName?: string | null;
+  budgetMinCents: number;
+  budgetMaxCents: number;
+  hoursNeeded: number;
+  deadline: string;
+  status: RfpStatus;
+  buyerId: number;
+  buyerDisplayName: string;
+  responseCount: number;
+  createdAt: string;
+}
+
+export interface RfpResponseDetail {
+  id: number;
+  rfpId: number;
+  professionalId: number;
+  professionalDisplayName: string;
+  professionalClerkId: string;
+  proposedRateCents: number;
+  message: string;
+  status: RfpResponseStatus;
+  createdAt: string;
+}
+
+export interface RfpDetail {
+  id: number;
+  title: string;
+  description: string;
+  skillCategoryId: number;
+  skillCategoryName: string;
+  /** @nullable */
+  skillCategoryParentName?: string | null;
+  budgetMinCents: number;
+  budgetMaxCents: number;
+  hoursNeeded: number;
+  deadline: string;
+  status: RfpStatus;
+  buyerId: number;
+  buyerDisplayName: string;
+  responses: RfpResponseDetail[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RfpsPage {
+  items: RfpSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CreateRfpBody {
+  title: string;
+  description: string;
+  skillCategoryId: number;
+  budgetMinCents: number;
+  budgetMaxCents: number;
+  hoursNeeded: number;
+  deadline: string;
+}
+
+export interface CreateRfpResponseBody {
+  proposedRateCents: number;
+  message: string;
+}
+
+export type ListListingsParams = {
+  skillCategoryId?: number;
+  listingType?: ListingType;
+  status?: ListingStatus;
+  minRateCents?: number;
+  maxRateCents?: number;
+  startDateAfter?: string;
+  experienceLevel?: ExperienceLevel;
+  timezone?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type ListRfpsParams = {
+  skillCategoryId?: number;
+  status?: RfpStatus;
+  limit?: number;
+  offset?: number;
+};
