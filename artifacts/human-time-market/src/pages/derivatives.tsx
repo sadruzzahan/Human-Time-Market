@@ -4,6 +4,7 @@ import {
   useGetDerivativesPortfolio,
   getGetDerivativesPortfolioQueryKey,
   useCancelSecondaryListing,
+  useCreateSecondaryListing,
   useExerciseOption,
   useExpireOption,
   useAcceptSwap,
@@ -18,12 +19,15 @@ import {
   getListSkillCategoriesQueryKey,
   useGetMyListings,
   getGetMyListingsQueryKey,
+  useGetBuyerCommitments,
+  getGetBuyerCommitmentsQueryKey,
   type SecondaryListingDetail,
   type TimeOptionDetail,
   type TimeSwapDetail,
   type BundleDetail,
   type SkillCategory,
   type ListingDetail,
+  type BuyerCommitment,
 } from "@workspace/api-client-react";
 import Navbar from "@/components/navbar";
 import { Button } from "@/components/ui/button";
@@ -117,6 +121,17 @@ function StatCard({
   );
 }
 
+function timeRemaining(endDate: string): string {
+  const end = new Date(endDate);
+  const now = new Date();
+  const diffMs = end.getTime() - now.getTime();
+  if (diffMs <= 0) return "Expired";
+  const days = Math.floor(diffMs / 86400000);
+  if (days > 30) return `${Math.floor(days / 30)}mo remaining`;
+  if (days > 0) return `${days}d remaining`;
+  return "< 1d remaining";
+}
+
 function SecondaryListingsTab({
   items, refetch, currentUserId,
 }: { items: SecondaryListingDetail[]; refetch: () => void; currentUserId: number | undefined }) {
@@ -124,7 +139,7 @@ function SecondaryListingsTab({
   const cancel = useCancelSecondaryListing();
 
   if (!items.length) {
-    return <EmptyState icon={<TrendingUp className="h-8 w-8 text-muted-foreground" />} title="No secondary listings" desc="List committed contracts for resale to see them here." />;
+    return <EmptyState icon={<TrendingUp className="h-8 w-8 text-muted-foreground" />} title="No secondary listings" desc="List committed contracts for resale or purchase one from the market." />;
   }
 
   return (
@@ -137,11 +152,25 @@ function SecondaryListingsTab({
               <Badge variant="outline" className={`font-mono text-[10px] ${statusColor(item.status)}`}>
                 {item.status.toUpperCase()}
               </Badge>
+              {item.sellerId === currentUserId && (
+                <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground border-border">SELLING</Badge>
+              )}
+              {item.buyerId === currentUserId && (
+                <Badge variant="outline" className="font-mono text-[10px] text-blue-400 border-blue-400/40 bg-blue-400/10">PURCHASED</Badge>
+              )}
             </div>
             <p className="text-sm font-semibold text-foreground">{item.originalListingTitle}</p>
-            <p className="text-xs text-muted-foreground">
-              {item.status === "sold" ? "Sold" : "Listed for resale"} · Ask: {fmt(item.askPriceCents)}
-            </p>
+            <div className="flex flex-wrap gap-x-3 mt-0.5">
+              <p className="text-xs text-muted-foreground">
+                Ask: <span className="font-mono text-foreground">{fmt(item.askPriceCents)}</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Orig. rate: <span className="font-mono text-muted-foreground">{fmtRate(item.originalRateCents)}</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {timeRemaining(item.endDate)}
+              </p>
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {item.hoursPerWeek}h/wk · {item.startDate} – {item.endDate} · {item.professionalDisplayName}
             </p>
@@ -165,6 +194,98 @@ function SecondaryListingsTab({
         </div>
       ))}
     </div>
+  );
+}
+
+function CreateResaleListingDialog({
+  open, onClose, buyerCommitments, onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  buyerCommitments: BuyerCommitment[];
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const createResale = useCreateSecondaryListing();
+  const [form, setForm] = useState({ originalListingId: "", askPriceDollars: "" });
+
+  const eligibleContracts = buyerCommitments.filter((c) => c.status === "committed");
+
+  function handleSubmit() {
+    const originalListingId = Number(form.originalListingId);
+    const askPriceCents = Math.round(Number(form.askPriceDollars) * 100);
+    if (!originalListingId || askPriceCents < 1) {
+      toast({ title: "Please select a contract and set an ask price", variant: "destructive" });
+      return;
+    }
+    createResale.mutate(
+      { data: { originalListingId, askPriceCents } },
+      {
+        onSuccess: () => {
+          toast({ title: "Contract listed for resale" });
+          setForm({ originalListingId: "", askPriceDollars: "" });
+          onClose();
+          onSuccess();
+        },
+        onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      },
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-mono">List Contract for Resale</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          {eligibleContracts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              You have no committed contracts eligible for resale.
+            </p>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <Label className="text-xs font-mono">Your Committed Contract *</Label>
+                <Select value={form.originalListingId} onValueChange={(v) => setForm((f) => ({ ...f, originalListingId: v }))}>
+                  <SelectTrigger className="font-mono text-sm">
+                    <SelectValue placeholder="Select contract to resell…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eligibleContracts.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)} className="font-mono text-sm">
+                        {c.title} · {fmtRate(c.rateCents)} · {c.skillCategoryName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-mono">Ask Price ($) *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  placeholder="e.g. 8000"
+                  value={form.askPriceDollars}
+                  onChange={(e) => setForm((f) => ({ ...f, askPriceDollars: e.target.value }))}
+                  className="font-mono text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">Price for full transfer of this contracted engagement</p>
+              </div>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" className="font-mono text-xs" onClick={onClose}>Cancel</Button>
+          {eligibleContracts.length > 0 && (
+            <Button size="sm" className="font-mono text-xs" disabled={createResale.isPending} onClick={handleSubmit}>
+              List for Resale
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -820,6 +941,7 @@ export default function Derivatives() {
   const [showCreateOption, setShowCreateOption] = useState(false);
   const [showProposeSwap, setShowProposeSwap] = useState(false);
   const [showCreateBundle, setShowCreateBundle] = useState(false);
+  const [showListForResale, setShowListForResale] = useState(false);
 
   const { data: profile } = useGetMyProfile({
     query: { enabled: !!isSignedIn, queryKey: getGetMyProfileQueryKey() },
@@ -836,6 +958,10 @@ export default function Derivatives() {
 
   const { data: myListings = [] } = useGetMyListings({
     query: { enabled: !!isSignedIn, queryKey: getGetMyListingsQueryKey() },
+  });
+
+  const { data: buyerCommitments = [] } = useGetBuyerCommitments({
+    query: { enabled: !!isSignedIn, queryKey: getGetBuyerCommitmentsQueryKey() },
   });
 
   const pendingSwaps = data?.swaps.filter((s) => s.status === "proposed").length ?? 0;
@@ -856,7 +982,10 @@ export default function Derivatives() {
             </p>
           </div>
           {isSignedIn && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" className="font-mono text-xs gap-1.5" onClick={() => setShowListForResale(true)}>
+                <TrendingUp className="h-3.5 w-3.5" /> List for Resale
+              </Button>
               <Button size="sm" variant="outline" className="font-mono text-xs gap-1.5" onClick={() => setShowCreateOption(true)}>
                 <Clock className="h-3.5 w-3.5" /> New Option
               </Button>
@@ -953,6 +1082,12 @@ export default function Derivatives() {
         open={showCreateBundle}
         onClose={() => setShowCreateBundle(false)}
         myListings={myListings}
+        onSuccess={refetch}
+      />
+      <CreateResaleListingDialog
+        open={showListForResale}
+        onClose={() => setShowListForResale(false)}
+        buyerCommitments={buyerCommitments}
         onSuccess={refetch}
       />
     </div>

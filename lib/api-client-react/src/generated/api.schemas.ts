@@ -640,6 +640,8 @@ export interface SecondaryListingDetail {
   /** @nullable */
   buyerId?: number | null;
   askPriceCents: number;
+  /** Original rate of the underlying listing in cents per hour */
+  originalRateCents: number;
   status: SecondaryListingStatus;
   listedAt: string;
   /** @nullable */

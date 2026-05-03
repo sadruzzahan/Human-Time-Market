@@ -2645,6 +2645,9 @@ components:
           type: ["integer", "null"]
         askPriceCents:
           type: integer
+        originalRateCents:
+          type: integer
+          description: Original rate of the underlying listing in cents per hour
         status:
           $ref: "#/components/schemas/SecondaryListingStatus"
         listedAt:
@@ -2666,6 +2669,7 @@ components:
         - sellerId
         - sellerDisplayName
         - askPriceCents
+        - originalRateCents
         - status
         - listedAt
 

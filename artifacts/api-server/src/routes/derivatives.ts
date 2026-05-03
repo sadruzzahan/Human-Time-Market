@@ -86,6 +86,7 @@ async function buildSecondaryListingDetail(id: number) {
     sellerDisplayName: seller?.displayName ?? "",
     buyerId: sl.buyerId ?? null,
     askPriceCents: sl.askPriceCents,
+    originalRateCents: listing?.rateCents ?? 0,
     status: sl.status,
     listedAt: sl.listedAt.toISOString(),
     soldAt: sl.soldAt?.toISOString() ?? null,
@@ -294,11 +295,11 @@ router.post("/secondary-market/:id/purchase", requireAuth, async (req, res) => {
       await tx.update(timeListings).set({ buyerId: user.id, updatedAt: new Date() }).where(eq(timeListings.id, sl.originalListingId));
     });
 
-    if (origListing?.skillCategoryId && origListing.rateCents && origListing.hoursPerWeek) {
+    if (origListing?.skillCategoryId && origListing.hoursPerWeek) {
       await recordDerivativeTrade(
         "secondary_purchase",
         origListing.skillCategoryId,
-        origListing.rateCents,
+        sl.askPriceCents,
         origListing.hoursPerWeek,
         { buyerId: user.id, sellerId: sl.sellerId, refId: id },
       );
@@ -600,26 +601,38 @@ router.post("/swaps/:id/accept", requireAuth, async (req, res) => {
     if (swap.counterpartyId !== user.id) { res.status(403).json({ error: "Only the counterparty can accept a swap" }); return; }
     if (swap.status !== "proposed") { res.status(400).json({ error: "Swap is not in proposed state" }); return; }
 
-    // Execute commitment exchange atomically
+    // Execute commitment exchange atomically with ownership-scoped WHERE clauses
     await db.transaction(async (tx) => {
-      // Proposer's listing → counterparty becomes buyer
-      const [proposerListing] = await tx.select().from(timeListings).where(eq(timeListings.id, swap.proposerListingId)).limit(1);
-      if (proposerListing) {
-        const newStatus = proposerListing.status === "open" || proposerListing.status === "in_bidding" ? "committed" : proposerListing.status;
-        await tx.update(timeListings)
-          .set({ buyerId: swap.counterpartyId, status: newStatus, updatedAt: new Date() })
-          .where(eq(timeListings.id, swap.proposerListingId));
-      }
+      // Verify and transfer proposer's listing — must be owned by proposer
+      const [proposerListing] = await tx
+        .select()
+        .from(timeListings)
+        .where(and(eq(timeListings.id, swap.proposerListingId), eq(timeListings.professionalId, swap.proposerId)))
+        .limit(1);
+      if (!proposerListing) throw new Error("Proposer listing ownership check failed — listing not owned by proposer");
 
-      // Counterparty's listing (if specified) → proposer becomes buyer
+      const proposerNewStatus =
+        proposerListing.status === "open" || proposerListing.status === "in_bidding" ? "committed" : proposerListing.status;
+      await tx
+        .update(timeListings)
+        .set({ buyerId: swap.counterpartyId, status: proposerNewStatus, updatedAt: new Date() })
+        .where(and(eq(timeListings.id, swap.proposerListingId), eq(timeListings.professionalId, swap.proposerId)));
+
+      // Verify and transfer counterparty's listing — must be owned by counterparty
       if (swap.counterpartyListingId) {
-        const [cpListing] = await tx.select().from(timeListings).where(eq(timeListings.id, swap.counterpartyListingId)).limit(1);
-        if (cpListing) {
-          const newStatus = cpListing.status === "open" || cpListing.status === "in_bidding" ? "committed" : cpListing.status;
-          await tx.update(timeListings)
-            .set({ buyerId: swap.proposerId, status: newStatus, updatedAt: new Date() })
-            .where(eq(timeListings.id, swap.counterpartyListingId));
-        }
+        const [cpListing] = await tx
+          .select()
+          .from(timeListings)
+          .where(and(eq(timeListings.id, swap.counterpartyListingId), eq(timeListings.professionalId, swap.counterpartyId)))
+          .limit(1);
+        if (!cpListing) throw new Error("Counterparty listing ownership check failed — listing not owned by counterparty");
+
+        const cpNewStatus =
+          cpListing.status === "open" || cpListing.status === "in_bidding" ? "committed" : cpListing.status;
+        await tx
+          .update(timeListings)
+          .set({ buyerId: swap.proposerId, status: cpNewStatus, updatedAt: new Date() })
+          .where(and(eq(timeListings.id, swap.counterpartyListingId), eq(timeListings.professionalId, swap.counterpartyId)));
       }
 
       await tx.update(timeSwaps).set({ status: "completed", updatedAt: new Date() }).where(eq(timeSwaps.id, id));

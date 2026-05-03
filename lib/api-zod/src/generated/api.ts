@@ -1176,6 +1176,9 @@ export const ListSecondaryListingsResponse = zod.object({
       sellerDisplayName: zod.string(),
       buyerId: zod.number().nullish(),
       askPriceCents: zod.number(),
+      originalRateCents: zod
+        .number()
+        .describe("Original rate of the underlying listing in cents per hour"),
       status: zod.enum(["open", "sold", "cancelled"]),
       listedAt: zod.coerce.date(),
       soldAt: zod.coerce.date().nullish(),
@@ -1216,6 +1219,9 @@ export const GetSecondaryListingResponse = zod.object({
   sellerDisplayName: zod.string(),
   buyerId: zod.number().nullish(),
   askPriceCents: zod.number(),
+  originalRateCents: zod
+    .number()
+    .describe("Original rate of the underlying listing in cents per hour"),
   status: zod.enum(["open", "sold", "cancelled"]),
   listedAt: zod.coerce.date(),
   soldAt: zod.coerce.date().nullish(),
@@ -1242,6 +1248,9 @@ export const CancelSecondaryListingResponse = zod.object({
   sellerDisplayName: zod.string(),
   buyerId: zod.number().nullish(),
   askPriceCents: zod.number(),
+  originalRateCents: zod
+    .number()
+    .describe("Original rate of the underlying listing in cents per hour"),
   status: zod.enum(["open", "sold", "cancelled"]),
   listedAt: zod.coerce.date(),
   soldAt: zod.coerce.date().nullish(),
@@ -1268,6 +1277,9 @@ export const PurchaseSecondaryListingResponse = zod.object({
   sellerDisplayName: zod.string(),
   buyerId: zod.number().nullish(),
   askPriceCents: zod.number(),
+  originalRateCents: zod
+    .number()
+    .describe("Original rate of the underlying listing in cents per hour"),
   status: zod.enum(["open", "sold", "cancelled"]),
   listedAt: zod.coerce.date(),
   soldAt: zod.coerce.date().nullish(),
@@ -1769,6 +1781,9 @@ export const GetDerivativesPortfolioResponse = zod.object({
       sellerDisplayName: zod.string(),
       buyerId: zod.number().nullish(),
       askPriceCents: zod.number(),
+      originalRateCents: zod
+        .number()
+        .describe("Original rate of the underlying listing in cents per hour"),
       status: zod.enum(["open", "sold", "cancelled"]),
       listedAt: zod.coerce.date(),
       soldAt: zod.coerce.date().nullish(),
