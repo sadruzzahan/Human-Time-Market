@@ -878,3 +878,257 @@ export const GetPriceHistoryResponseItem = zod.object({
   volumeHours: zod.number(),
 });
 export const GetPriceHistoryResponse = zod.array(GetPriceHistoryResponseItem);
+
+/**
+ * @summary Get all active and upcoming committed listings for the authenticated professional
+ */
+export const GetProfessionalCommitmentsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  buyerDisplayName: zod.string(),
+  hoursPerWeek: zod.number(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  rateCents: zod.number(),
+  status: zod.enum([
+    "open",
+    "in_bidding",
+    "committed",
+    "completed",
+    "cancelled",
+  ]),
+  hoursDelivered: zod.number(),
+  hoursRemaining: zod.number(),
+  totalHours: zod.number(),
+  deliveryLogs: zod.array(
+    zod.object({
+      id: zod.number(),
+      listingId: zod.number(),
+      professionalId: zod.number(),
+      hoursLogged: zod.number(),
+      note: zod.string().nullish(),
+      loggedAt: zod.coerce.date(),
+      confirmedAt: zod.coerce.date().nullish(),
+      disputed: zod.boolean(),
+    }),
+  ),
+  dispute: zod
+    .union([
+      zod.object({
+        id: zod.number(),
+        listingId: zod.number(),
+        initiatorId: zod.number(),
+        reason: zod.string(),
+        status: zod.enum([
+          "open",
+          "under_review",
+          "resolved_professional",
+          "resolved_buyer",
+          "withdrawn",
+        ]),
+        createdAt: zod.coerce.date(),
+        updatedAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  escrowStatus: zod
+    .union([
+      zod.enum(["pending_payment", "held", "released", "refunded"]),
+      zod.null(),
+    ])
+    .optional(),
+});
+export const GetProfessionalCommitmentsResponse = zod.array(
+  GetProfessionalCommitmentsResponseItem,
+);
+
+/**
+ * @summary Get projected weekly earnings based on active committed contracts
+ */
+export const GetProfessionalCashFlowResponseItem = zod.object({
+  weekStart: zod.coerce.date(),
+  projectedCents: zod.number(),
+  contracts: zod.number(),
+});
+export const GetProfessionalCashFlowResponse = zod.array(
+  GetProfessionalCashFlowResponseItem,
+);
+
+/**
+ * @summary Get earnings history from completed contracts
+ */
+export const GetProfessionalEarningsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  skillCategoryName: zod.string(),
+  buyerDisplayName: zod.string(),
+  rateCents: zod.number(),
+  hoursDelivered: zod.number(),
+  totalEarnedCents: zod.number(),
+  completedAt: zod.coerce.date(),
+});
+export const GetProfessionalEarningsResponse = zod.array(
+  GetProfessionalEarningsResponseItem,
+);
+
+/**
+ * @summary Get rate health — current listing rate vs market VWAP per skill category
+ */
+export const GetProfessionalRateHealthResponseItem = zod.object({
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  myRateCents: zod.number(),
+  marketVwapCents: zod.number().nullish(),
+  recommendation: zod.enum(["raise", "lower", "hold", "no_data"]),
+  deltaPercent: zod.number().nullish(),
+});
+export const GetProfessionalRateHealthResponse = zod.array(
+  GetProfessionalRateHealthResponseItem,
+);
+
+/**
+ * @summary Get all committed listings purchased by the authenticated buyer
+ */
+export const GetBuyerCommitmentsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  professionalDisplayName: zod.string(),
+  hoursPerWeek: zod.number(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  rateCents: zod.number(),
+  status: zod.enum([
+    "open",
+    "in_bidding",
+    "committed",
+    "completed",
+    "cancelled",
+  ]),
+  hoursDelivered: zod.number(),
+  hoursRemaining: zod.number(),
+  totalHours: zod.number(),
+  deliveryLogs: zod.array(
+    zod.object({
+      id: zod.number(),
+      listingId: zod.number(),
+      professionalId: zod.number(),
+      hoursLogged: zod.number(),
+      note: zod.string().nullish(),
+      loggedAt: zod.coerce.date(),
+      confirmedAt: zod.coerce.date().nullish(),
+      disputed: zod.boolean(),
+    }),
+  ),
+  dispute: zod
+    .union([
+      zod.object({
+        id: zod.number(),
+        listingId: zod.number(),
+        initiatorId: zod.number(),
+        reason: zod.string(),
+        status: zod.enum([
+          "open",
+          "under_review",
+          "resolved_professional",
+          "resolved_buyer",
+          "withdrawn",
+        ]),
+        createdAt: zod.coerce.date(),
+        updatedAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  escrowStatus: zod
+    .union([
+      zod.enum(["pending_payment", "held", "released", "refunded"]),
+      zod.null(),
+    ])
+    .optional(),
+});
+export const GetBuyerCommitmentsResponse = zod.array(
+  GetBuyerCommitmentsResponseItem,
+);
+
+/**
+ * @summary Log delivered hours against a committed contract (professional only)
+ */
+export const LogDeliveryParams = zod.object({
+  listingId: zod.coerce.number(),
+});
+
+export const LogDeliveryBody = zod.object({
+  hoursLogged: zod.number().min(1),
+  note: zod.string().nullish(),
+});
+
+/**
+ * @summary Buyer confirms a delivery log entry
+ */
+export const ConfirmDeliveryParams = zod.object({
+  listingId: zod.coerce.number(),
+  deliveryId: zod.coerce.number(),
+});
+
+export const ConfirmDeliveryResponse = zod.object({
+  id: zod.number(),
+  listingId: zod.number(),
+  professionalId: zod.number(),
+  hoursLogged: zod.number(),
+  note: zod.string().nullish(),
+  loggedAt: zod.coerce.date(),
+  confirmedAt: zod.coerce.date().nullish(),
+  disputed: zod.boolean(),
+});
+
+/**
+ * @summary Open a dispute on a committed contract
+ */
+export const OpenDisputeParams = zod.object({
+  listingId: zod.coerce.number(),
+});
+
+export const OpenDisputeBody = zod.object({
+  reason: zod.string(),
+});
+
+/**
+ * @summary Get the current user's notification feed with unread badge count
+ */
+export const GetNotificationsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      type: zod.enum([
+        "new_bid",
+        "bid_accepted",
+        "delivery_logged",
+        "delivery_confirmed",
+        "payment_released",
+        "contract_expiring",
+        "dispute_opened",
+        "dispute_resolved",
+      ]),
+      payload: zod.record(zod.string(), zod.unknown()),
+      read: zod.boolean(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  unreadCount: zod.number(),
+});
+
+/**
+ * @summary Mark notifications as read
+ */
+export const MarkNotificationsReadBody = zod.object({
+  ids: zod
+    .array(zod.number())
+    .optional()
+    .describe("Notification IDs to mark as read; omit to mark all as read"),
+});

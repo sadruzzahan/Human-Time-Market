@@ -19,22 +19,33 @@ import type {
 import type {
   BidDetail,
   BookingConfirmation,
+  BuyerCommitment,
+  CashFlowWeek,
   CreateListingBody,
   CreateRfpBody,
   CreateRfpResponseBody,
+  DeliveryLog,
+  Dispute,
+  EarningsEntry,
   ErrorResponse,
   HealthStatus,
   ListListingsParams,
   ListRfpsParams,
   ListingDetail,
   ListingsPage,
+  LogDeliveryBody,
+  MarkReadBody,
+  NotificationFeed,
+  OpenDisputeBody,
   Order,
   OrderBookDepth,
   PlaceBidBody,
   PlaceOrderBody,
   PriceHistoryPoint,
   PriceIndexEntry,
+  ProfessionalCommitment,
   PublicProfile,
+  RateHealthEntry,
   RfpDetail,
   RfpResponseDetail,
   RfpsPage,
@@ -2492,3 +2503,811 @@ export function useGetPriceHistory<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get all active and upcoming committed listings for the authenticated professional
+ */
+export const getGetProfessionalCommitmentsUrl = () => {
+  return `/api/dashboard/professional/commitments`;
+};
+
+export const getProfessionalCommitments = async (
+  options?: RequestInit,
+): Promise<ProfessionalCommitment[]> => {
+  return customFetch<ProfessionalCommitment[]>(
+    getGetProfessionalCommitmentsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProfessionalCommitmentsQueryKey = () => {
+  return [`/api/dashboard/professional/commitments`] as const;
+};
+
+export const getGetProfessionalCommitmentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProfessionalCommitments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalCommitments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProfessionalCommitmentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProfessionalCommitments>>
+  > = ({ signal }) => getProfessionalCommitments({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalCommitments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProfessionalCommitmentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProfessionalCommitments>>
+>;
+export type GetProfessionalCommitmentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all active and upcoming committed listings for the authenticated professional
+ */
+
+export function useGetProfessionalCommitments<
+  TData = Awaited<ReturnType<typeof getProfessionalCommitments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalCommitments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProfessionalCommitmentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get projected weekly earnings based on active committed contracts
+ */
+export const getGetProfessionalCashFlowUrl = () => {
+  return `/api/dashboard/professional/cash-flow`;
+};
+
+export const getProfessionalCashFlow = async (
+  options?: RequestInit,
+): Promise<CashFlowWeek[]> => {
+  return customFetch<CashFlowWeek[]>(getGetProfessionalCashFlowUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetProfessionalCashFlowQueryKey = () => {
+  return [`/api/dashboard/professional/cash-flow`] as const;
+};
+
+export const getGetProfessionalCashFlowQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProfessionalCashFlow>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalCashFlow>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProfessionalCashFlowQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProfessionalCashFlow>>
+  > = ({ signal }) => getProfessionalCashFlow({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalCashFlow>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProfessionalCashFlowQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProfessionalCashFlow>>
+>;
+export type GetProfessionalCashFlowQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get projected weekly earnings based on active committed contracts
+ */
+
+export function useGetProfessionalCashFlow<
+  TData = Awaited<ReturnType<typeof getProfessionalCashFlow>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalCashFlow>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProfessionalCashFlowQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get earnings history from completed contracts
+ */
+export const getGetProfessionalEarningsUrl = () => {
+  return `/api/dashboard/professional/earnings`;
+};
+
+export const getProfessionalEarnings = async (
+  options?: RequestInit,
+): Promise<EarningsEntry[]> => {
+  return customFetch<EarningsEntry[]>(getGetProfessionalEarningsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetProfessionalEarningsQueryKey = () => {
+  return [`/api/dashboard/professional/earnings`] as const;
+};
+
+export const getGetProfessionalEarningsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProfessionalEarnings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalEarnings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProfessionalEarningsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProfessionalEarnings>>
+  > = ({ signal }) => getProfessionalEarnings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalEarnings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProfessionalEarningsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProfessionalEarnings>>
+>;
+export type GetProfessionalEarningsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get earnings history from completed contracts
+ */
+
+export function useGetProfessionalEarnings<
+  TData = Awaited<ReturnType<typeof getProfessionalEarnings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalEarnings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProfessionalEarningsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get rate health — current listing rate vs market VWAP per skill category
+ */
+export const getGetProfessionalRateHealthUrl = () => {
+  return `/api/dashboard/professional/rate-health`;
+};
+
+export const getProfessionalRateHealth = async (
+  options?: RequestInit,
+): Promise<RateHealthEntry[]> => {
+  return customFetch<RateHealthEntry[]>(getGetProfessionalRateHealthUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetProfessionalRateHealthQueryKey = () => {
+  return [`/api/dashboard/professional/rate-health`] as const;
+};
+
+export const getGetProfessionalRateHealthQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProfessionalRateHealth>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalRateHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProfessionalRateHealthQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProfessionalRateHealth>>
+  > = ({ signal }) => getProfessionalRateHealth({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalRateHealth>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProfessionalRateHealthQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProfessionalRateHealth>>
+>;
+export type GetProfessionalRateHealthQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get rate health — current listing rate vs market VWAP per skill category
+ */
+
+export function useGetProfessionalRateHealth<
+  TData = Awaited<ReturnType<typeof getProfessionalRateHealth>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalRateHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProfessionalRateHealthQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get all committed listings purchased by the authenticated buyer
+ */
+export const getGetBuyerCommitmentsUrl = () => {
+  return `/api/dashboard/buyer/commitments`;
+};
+
+export const getBuyerCommitments = async (
+  options?: RequestInit,
+): Promise<BuyerCommitment[]> => {
+  return customFetch<BuyerCommitment[]>(getGetBuyerCommitmentsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBuyerCommitmentsQueryKey = () => {
+  return [`/api/dashboard/buyer/commitments`] as const;
+};
+
+export const getGetBuyerCommitmentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBuyerCommitments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBuyerCommitments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBuyerCommitmentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBuyerCommitments>>
+  > = ({ signal }) => getBuyerCommitments({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBuyerCommitments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBuyerCommitmentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBuyerCommitments>>
+>;
+export type GetBuyerCommitmentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all committed listings purchased by the authenticated buyer
+ */
+
+export function useGetBuyerCommitments<
+  TData = Awaited<ReturnType<typeof getBuyerCommitments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBuyerCommitments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBuyerCommitmentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Log delivered hours against a committed contract (professional only)
+ */
+export const getLogDeliveryUrl = (listingId: number) => {
+  return `/api/listings/${listingId}/deliveries`;
+};
+
+export const logDelivery = async (
+  listingId: number,
+  logDeliveryBody: LogDeliveryBody,
+  options?: RequestInit,
+): Promise<DeliveryLog> => {
+  return customFetch<DeliveryLog>(getLogDeliveryUrl(listingId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(logDeliveryBody),
+  });
+};
+
+export const getLogDeliveryMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof logDelivery>>,
+    TError,
+    { listingId: number; data: BodyType<LogDeliveryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof logDelivery>>,
+  TError,
+  { listingId: number; data: BodyType<LogDeliveryBody> },
+  TContext
+> => {
+  const mutationKey = ["logDelivery"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof logDelivery>>,
+    { listingId: number; data: BodyType<LogDeliveryBody> }
+  > = (props) => {
+    const { listingId, data } = props ?? {};
+
+    return logDelivery(listingId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LogDeliveryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof logDelivery>>
+>;
+export type LogDeliveryMutationBody = BodyType<LogDeliveryBody>;
+export type LogDeliveryMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Log delivered hours against a committed contract (professional only)
+ */
+export const useLogDelivery = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof logDelivery>>,
+    TError,
+    { listingId: number; data: BodyType<LogDeliveryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof logDelivery>>,
+  TError,
+  { listingId: number; data: BodyType<LogDeliveryBody> },
+  TContext
+> => {
+  return useMutation(getLogDeliveryMutationOptions(options));
+};
+
+/**
+ * @summary Buyer confirms a delivery log entry
+ */
+export const getConfirmDeliveryUrl = (
+  listingId: number,
+  deliveryId: number,
+) => {
+  return `/api/listings/${listingId}/deliveries/${deliveryId}/confirm`;
+};
+
+export const confirmDelivery = async (
+  listingId: number,
+  deliveryId: number,
+  options?: RequestInit,
+): Promise<DeliveryLog> => {
+  return customFetch<DeliveryLog>(
+    getConfirmDeliveryUrl(listingId, deliveryId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getConfirmDeliveryMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmDelivery>>,
+    TError,
+    { listingId: number; deliveryId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof confirmDelivery>>,
+  TError,
+  { listingId: number; deliveryId: number },
+  TContext
+> => {
+  const mutationKey = ["confirmDelivery"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof confirmDelivery>>,
+    { listingId: number; deliveryId: number }
+  > = (props) => {
+    const { listingId, deliveryId } = props ?? {};
+
+    return confirmDelivery(listingId, deliveryId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConfirmDeliveryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof confirmDelivery>>
+>;
+
+export type ConfirmDeliveryMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Buyer confirms a delivery log entry
+ */
+export const useConfirmDelivery = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmDelivery>>,
+    TError,
+    { listingId: number; deliveryId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof confirmDelivery>>,
+  TError,
+  { listingId: number; deliveryId: number },
+  TContext
+> => {
+  return useMutation(getConfirmDeliveryMutationOptions(options));
+};
+
+/**
+ * @summary Open a dispute on a committed contract
+ */
+export const getOpenDisputeUrl = (listingId: number) => {
+  return `/api/listings/${listingId}/dispute`;
+};
+
+export const openDispute = async (
+  listingId: number,
+  openDisputeBody: OpenDisputeBody,
+  options?: RequestInit,
+): Promise<Dispute> => {
+  return customFetch<Dispute>(getOpenDisputeUrl(listingId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(openDisputeBody),
+  });
+};
+
+export const getOpenDisputeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof openDispute>>,
+    TError,
+    { listingId: number; data: BodyType<OpenDisputeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof openDispute>>,
+  TError,
+  { listingId: number; data: BodyType<OpenDisputeBody> },
+  TContext
+> => {
+  const mutationKey = ["openDispute"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof openDispute>>,
+    { listingId: number; data: BodyType<OpenDisputeBody> }
+  > = (props) => {
+    const { listingId, data } = props ?? {};
+
+    return openDispute(listingId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type OpenDisputeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof openDispute>>
+>;
+export type OpenDisputeMutationBody = BodyType<OpenDisputeBody>;
+export type OpenDisputeMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Open a dispute on a committed contract
+ */
+export const useOpenDispute = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof openDispute>>,
+    TError,
+    { listingId: number; data: BodyType<OpenDisputeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof openDispute>>,
+  TError,
+  { listingId: number; data: BodyType<OpenDisputeBody> },
+  TContext
+> => {
+  return useMutation(getOpenDisputeMutationOptions(options));
+};
+
+/**
+ * @summary Get the current user's notification feed with unread badge count
+ */
+export const getGetNotificationsUrl = () => {
+  return `/api/notifications`;
+};
+
+export const getNotifications = async (
+  options?: RequestInit,
+): Promise<NotificationFeed> => {
+  return customFetch<NotificationFeed>(getGetNotificationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetNotificationsQueryKey = () => {
+  return [`/api/notifications`] as const;
+};
+
+export const getGetNotificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getNotifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNotifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetNotificationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getNotifications>>
+  > = ({ signal }) => getNotifications({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getNotifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetNotificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getNotifications>>
+>;
+export type GetNotificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the current user's notification feed with unread badge count
+ */
+
+export function useGetNotifications<
+  TData = Awaited<ReturnType<typeof getNotifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNotifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetNotificationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Mark notifications as read
+ */
+export const getMarkNotificationsReadUrl = () => {
+  return `/api/notifications/read`;
+};
+
+export const markNotificationsRead = async (
+  markReadBody: MarkReadBody,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getMarkNotificationsReadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(markReadBody),
+  });
+};
+
+export const getMarkNotificationsReadMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markNotificationsRead>>,
+    TError,
+    { data: BodyType<MarkReadBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markNotificationsRead>>,
+  TError,
+  { data: BodyType<MarkReadBody> },
+  TContext
+> => {
+  const mutationKey = ["markNotificationsRead"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markNotificationsRead>>,
+    { data: BodyType<MarkReadBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return markNotificationsRead(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkNotificationsReadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markNotificationsRead>>
+>;
+export type MarkNotificationsReadMutationBody = BodyType<MarkReadBody>;
+export type MarkNotificationsReadMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark notifications as read
+ */
+export const useMarkNotificationsRead = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markNotificationsRead>>,
+    TError,
+    { data: BodyType<MarkReadBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markNotificationsRead>>,
+  TError,
+  { data: BodyType<MarkReadBody> },
+  TContext
+> => {
+  return useMutation(getMarkNotificationsReadMutationOptions(options));
+};

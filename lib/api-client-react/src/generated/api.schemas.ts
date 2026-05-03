@@ -432,6 +432,161 @@ export interface PriceHistoryPoint {
   volumeHours: number;
 }
 
+export type DisputeStatus = (typeof DisputeStatus)[keyof typeof DisputeStatus];
+
+export const DisputeStatus = {
+  open: "open",
+  under_review: "under_review",
+  resolved_professional: "resolved_professional",
+  resolved_buyer: "resolved_buyer",
+  withdrawn: "withdrawn",
+} as const;
+
+export type NotificationType =
+  (typeof NotificationType)[keyof typeof NotificationType];
+
+export const NotificationType = {
+  new_bid: "new_bid",
+  bid_accepted: "bid_accepted",
+  delivery_logged: "delivery_logged",
+  delivery_confirmed: "delivery_confirmed",
+  payment_released: "payment_released",
+  contract_expiring: "contract_expiring",
+  dispute_opened: "dispute_opened",
+  dispute_resolved: "dispute_resolved",
+} as const;
+
+export interface DeliveryLog {
+  id: number;
+  listingId: number;
+  professionalId: number;
+  hoursLogged: number;
+  /** @nullable */
+  note?: string | null;
+  loggedAt: string;
+  /** @nullable */
+  confirmedAt?: string | null;
+  disputed: boolean;
+}
+
+export interface LogDeliveryBody {
+  /** @minimum 1 */
+  hoursLogged: number;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface Dispute {
+  id: number;
+  listingId: number;
+  initiatorId: number;
+  reason: string;
+  status: DisputeStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OpenDisputeBody {
+  reason: string;
+}
+
+export type NotificationPayload = { [key: string]: unknown };
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: NotificationType;
+  payload: NotificationPayload;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface NotificationFeed {
+  items: Notification[];
+  unreadCount: number;
+}
+
+export interface MarkReadBody {
+  /** Notification IDs to mark as read; omit to mark all as read */
+  ids?: number[];
+}
+
+export interface ProfessionalCommitment {
+  id: number;
+  title: string;
+  skillCategoryId: number;
+  skillCategoryName: string;
+  buyerDisplayName: string;
+  hoursPerWeek: number;
+  startDate: string;
+  endDate: string;
+  rateCents: number;
+  status: ListingStatus;
+  hoursDelivered: number;
+  hoursRemaining: number;
+  totalHours: number;
+  deliveryLogs: DeliveryLog[];
+  dispute?: Dispute | null;
+  escrowStatus?: EscrowStatus | null;
+}
+
+export interface BuyerCommitment {
+  id: number;
+  title: string;
+  skillCategoryId: number;
+  skillCategoryName: string;
+  professionalDisplayName: string;
+  hoursPerWeek: number;
+  startDate: string;
+  endDate: string;
+  rateCents: number;
+  status: ListingStatus;
+  hoursDelivered: number;
+  hoursRemaining: number;
+  totalHours: number;
+  deliveryLogs: DeliveryLog[];
+  dispute?: Dispute | null;
+  escrowStatus?: EscrowStatus | null;
+}
+
+export interface CashFlowWeek {
+  weekStart: string;
+  projectedCents: number;
+  contracts: number;
+}
+
+export interface EarningsEntry {
+  id: number;
+  title: string;
+  skillCategoryName: string;
+  buyerDisplayName: string;
+  rateCents: number;
+  hoursDelivered: number;
+  totalEarnedCents: number;
+  completedAt: string;
+}
+
+export type RateHealthEntryRecommendation =
+  (typeof RateHealthEntryRecommendation)[keyof typeof RateHealthEntryRecommendation];
+
+export const RateHealthEntryRecommendation = {
+  raise: "raise",
+  lower: "lower",
+  hold: "hold",
+  no_data: "no_data",
+} as const;
+
+export interface RateHealthEntry {
+  skillCategoryId: number;
+  skillCategoryName: string;
+  myRateCents: number;
+  /** @nullable */
+  marketVwapCents?: number | null;
+  recommendation: RateHealthEntryRecommendation;
+  /** @nullable */
+  deltaPercent?: number | null;
+}
+
 export type ListListingsParams = {
   skillCategoryId?: number;
   listingType?: ListingType;

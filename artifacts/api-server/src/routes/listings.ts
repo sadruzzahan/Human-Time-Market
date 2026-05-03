@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, users, professionalProfiles, skillCategories, timeListings, bids, escrowRecords, priceSnapshots } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { eq, and, gte, lte, count, desc, SQL, inArray, sql } from "drizzle-orm";
+import { createNotification } from "./dashboard";
 import {
   CreateListingBody,
   UpdateListingBody,
@@ -563,6 +564,14 @@ router.post("/listings/:listingId/bids", requireAuth, async (req, res) => {
       await db.update(timeListings).set({ status: "in_bidding", updatedAt: new Date() }).where(eq(timeListings.id, id));
     }
 
+    await createNotification(listing.professionalId, "new_bid", {
+      listingId: id,
+      listingTitle: listing.title,
+      bidderId: bidder.id,
+      bidderDisplayName: bidder.displayName,
+      bidRateCents: parsed.data.bidRateCents,
+    });
+
     res.status(201).json({
       id: bidRow.id,
       listingId: bidRow.listingId,
@@ -648,6 +657,12 @@ router.post("/listings/:listingId/bids/:bidId/accept", requireAuth, async (req, 
         })
         .returning();
       return { detail: await buildListingDetail(listingId), escrow: escrowRow };
+    });
+
+    await createNotification(bid.bidderId, "bid_accepted", {
+      listingId,
+      listingTitle: listing.title,
+      bidRateCents: bid.bidRateCents,
     });
 
     res.json({ listing: detail, escrow: { ...escrow, createdAt: escrow.createdAt.toISOString(), updatedAt: escrow.updatedAt.toISOString() } });

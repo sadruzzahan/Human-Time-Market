@@ -5,6 +5,7 @@ import skillCategoriesRouter from "./skillCategories";
 import listingsRouter from "./listings";
 import rfpsRouter from "./rfps";
 import orderBookRouter from "./orderBook";
+import dashboardRouter from "./dashboard";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(skillCategoriesRouter);
 router.use(listingsRouter);
 router.use(rfpsRouter);
 router.use(orderBookRouter);
+router.use(dashboardRouter);
 
 export default router;

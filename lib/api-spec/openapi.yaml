@@ -702,6 +702,207 @@ paths:
                 items:
                   $ref: "#/components/schemas/PriceHistoryPoint"
 
+  /dashboard/professional/commitments:
+    get:
+      operationId: getProfessionalCommitments
+      tags: [dashboard]
+      summary: Get all active and upcoming committed listings for the authenticated professional
+      responses:
+        "200":
+          description: Professional commitments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProfessionalCommitment"
+
+  /dashboard/professional/cash-flow:
+    get:
+      operationId: getProfessionalCashFlow
+      tags: [dashboard]
+      summary: Get projected weekly earnings based on active committed contracts
+      responses:
+        "200":
+          description: Cash flow projections by week
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CashFlowWeek"
+
+  /dashboard/professional/earnings:
+    get:
+      operationId: getProfessionalEarnings
+      tags: [dashboard]
+      summary: Get earnings history from completed contracts
+      responses:
+        "200":
+          description: Earnings history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EarningsEntry"
+
+  /dashboard/professional/rate-health:
+    get:
+      operationId: getProfessionalRateHealth
+      tags: [dashboard]
+      summary: Get rate health — current listing rate vs market VWAP per skill category
+      responses:
+        "200":
+          description: Rate health entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RateHealthEntry"
+
+  /dashboard/buyer/commitments:
+    get:
+      operationId: getBuyerCommitments
+      tags: [dashboard]
+      summary: Get all committed listings purchased by the authenticated buyer
+      responses:
+        "200":
+          description: Buyer commitments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BuyerCommitment"
+
+  /listings/{listingId}/deliveries:
+    post:
+      operationId: logDelivery
+      tags: [dashboard]
+      summary: Log delivered hours against a committed contract (professional only)
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogDeliveryBody"
+      responses:
+        "201":
+          description: Delivery log created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryLog"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /listings/{listingId}/deliveries/{deliveryId}/confirm:
+    post:
+      operationId: confirmDelivery
+      tags: [dashboard]
+      summary: Buyer confirms a delivery log entry
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: deliveryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Delivery confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryLog"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /listings/{listingId}/dispute:
+    post:
+      operationId: openDispute
+      tags: [dashboard]
+      summary: Open a dispute on a committed contract
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenDisputeBody"
+      responses:
+        "201":
+          description: Dispute opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dispute"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications:
+    get:
+      operationId: getNotifications
+      tags: [dashboard]
+      summary: Get the current user's notification feed with unread badge count
+      responses:
+        "200":
+          description: Notification feed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationFeed"
+
+  /notifications/read:
+    post:
+      operationId: markNotificationsRead
+      tags: [dashboard]
+      summary: Mark notifications as read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkReadBody"
+      responses:
+        "204":
+          description: Marked as read
+
 components:
   schemas:
     HealthStatus:
@@ -1522,3 +1723,320 @@ components:
         - date
         - vwapCents
         - volumeHours
+
+    DisputeStatus:
+      type: string
+      enum: [open, under_review, resolved_professional, resolved_buyer, withdrawn]
+
+    NotificationType:
+      type: string
+      enum: [new_bid, bid_accepted, delivery_logged, delivery_confirmed, payment_released, contract_expiring, dispute_opened, dispute_resolved]
+
+    DeliveryLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        listingId:
+          type: integer
+        professionalId:
+          type: integer
+        hoursLogged:
+          type: integer
+        note:
+          type: ["string", "null"]
+        loggedAt:
+          type: string
+          format: date-time
+        confirmedAt:
+          type: ["string", "null"]
+          format: date-time
+        disputed:
+          type: boolean
+      required:
+        - id
+        - listingId
+        - professionalId
+        - hoursLogged
+        - loggedAt
+        - disputed
+
+    LogDeliveryBody:
+      type: object
+      properties:
+        hoursLogged:
+          type: integer
+          minimum: 1
+        note:
+          type: ["string", "null"]
+      required:
+        - hoursLogged
+
+    Dispute:
+      type: object
+      properties:
+        id:
+          type: integer
+        listingId:
+          type: integer
+        initiatorId:
+          type: integer
+        reason:
+          type: string
+        status:
+          $ref: "#/components/schemas/DisputeStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - listingId
+        - initiatorId
+        - reason
+        - status
+        - createdAt
+        - updatedAt
+
+    OpenDisputeBody:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+        - reason
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        type:
+          $ref: "#/components/schemas/NotificationType"
+        payload:
+          type: object
+          additionalProperties: true
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - type
+        - payload
+        - read
+        - createdAt
+
+    NotificationFeed:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+        unreadCount:
+          type: integer
+      required:
+        - items
+        - unreadCount
+
+    MarkReadBody:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+          description: Notification IDs to mark as read; omit to mark all as read
+      required: []
+
+    ProfessionalCommitment:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        buyerDisplayName:
+          type: string
+        hoursPerWeek:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        rateCents:
+          type: integer
+        status:
+          $ref: "#/components/schemas/ListingStatus"
+        hoursDelivered:
+          type: integer
+        hoursRemaining:
+          type: integer
+        totalHours:
+          type: integer
+        deliveryLogs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveryLog"
+        dispute:
+          oneOf:
+            - $ref: "#/components/schemas/Dispute"
+            - type: "null"
+        escrowStatus:
+          oneOf:
+            - $ref: "#/components/schemas/EscrowStatus"
+            - type: "null"
+      required:
+        - id
+        - title
+        - skillCategoryId
+        - skillCategoryName
+        - buyerDisplayName
+        - hoursPerWeek
+        - startDate
+        - endDate
+        - rateCents
+        - status
+        - hoursDelivered
+        - hoursRemaining
+        - totalHours
+        - deliveryLogs
+
+    BuyerCommitment:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        professionalDisplayName:
+          type: string
+        hoursPerWeek:
+          type: integer
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        rateCents:
+          type: integer
+        status:
+          $ref: "#/components/schemas/ListingStatus"
+        hoursDelivered:
+          type: integer
+        hoursRemaining:
+          type: integer
+        totalHours:
+          type: integer
+        deliveryLogs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveryLog"
+        dispute:
+          oneOf:
+            - $ref: "#/components/schemas/Dispute"
+            - type: "null"
+        escrowStatus:
+          oneOf:
+            - $ref: "#/components/schemas/EscrowStatus"
+            - type: "null"
+      required:
+        - id
+        - title
+        - skillCategoryId
+        - skillCategoryName
+        - professionalDisplayName
+        - hoursPerWeek
+        - startDate
+        - endDate
+        - rateCents
+        - status
+        - hoursDelivered
+        - hoursRemaining
+        - totalHours
+        - deliveryLogs
+
+    CashFlowWeek:
+      type: object
+      properties:
+        weekStart:
+          type: string
+          format: date
+        projectedCents:
+          type: integer
+        contracts:
+          type: integer
+      required:
+        - weekStart
+        - projectedCents
+        - contracts
+
+    EarningsEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        skillCategoryName:
+          type: string
+        buyerDisplayName:
+          type: string
+        rateCents:
+          type: integer
+        hoursDelivered:
+          type: integer
+        totalEarnedCents:
+          type: integer
+        completedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - skillCategoryName
+        - buyerDisplayName
+        - rateCents
+        - hoursDelivered
+        - totalEarnedCents
+        - completedAt
+
+    RateHealthEntry:
+      type: object
+      properties:
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        myRateCents:
+          type: integer
+        marketVwapCents:
+          type: ["integer", "null"]
+        recommendation:
+          type: string
+          enum: [raise, lower, hold, no_data]
+        deltaPercent:
+          type: ["number", "null"]
+      required:
+        - skillCategoryId
+        - skillCategoryName
+        - myRateCents
+        - recommendation
