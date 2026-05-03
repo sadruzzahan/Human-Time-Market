@@ -217,27 +217,23 @@ router.post("/listings", requireAuth, async (req, res) => {
       return;
     }
     const body = parsed.data;
-    await db.insert(timeListings).values({
-      professionalId: user.id,
-      skillCategoryId: body.skillCategoryId,
-      title: body.title,
-      description: body.description ?? null,
-      hoursPerWeek: body.hoursPerWeek,
-      startDate: toDateStr(body.startDate)!,
-      endDate: toDateStr(body.endDate)!,
-      listingType: body.listingType,
-      rateCents: body.rateCents,
-      status: "open",
-    });
+    const [inserted] = await db
+      .insert(timeListings)
+      .values({
+        professionalId: user.id,
+        skillCategoryId: body.skillCategoryId,
+        title: body.title,
+        description: body.description ?? null,
+        hoursPerWeek: body.hoursPerWeek,
+        startDate: toDateStr(body.startDate)!,
+        endDate: toDateStr(body.endDate)!,
+        listingType: body.listingType,
+        rateCents: body.rateCents,
+        status: "open",
+      })
+      .returning({ id: timeListings.id });
 
-    const [newest] = await db
-      .select()
-      .from(timeListings)
-      .where(eq(timeListings.professionalId, user.id))
-      .orderBy(desc(timeListings.createdAt))
-      .limit(1);
-
-    const detail = await buildListingDetail(newest.id);
+    const detail = await buildListingDetail(inserted.id);
     res.status(201).json(detail);
   } catch (err) {
     req.log.error({ err }, "createListing error");
@@ -401,20 +397,24 @@ router.post("/listings/:listingId/book", requireAuth, async (req, res) => {
       return;
     }
 
-    await db.update(timeListings).set({ status: "committed", buyerId: buyer.id, updatedAt: new Date() }).where(eq(timeListings.id, id));
+    const { detail, escrow } = await db.transaction(async (tx) => {
+      await tx
+        .update(timeListings)
+        .set({ status: "committed", buyerId: buyer.id, updatedAt: new Date() })
+        .where(eq(timeListings.id, id));
+      const [escrowRow] = await tx
+        .insert(escrowRecords)
+        .values({
+          listingId: id,
+          buyerId: buyer.id,
+          professionalId: listing.professionalId,
+          amountCents: listing.rateCents * listing.hoursPerWeek,
+          status: "pending_payment",
+        })
+        .returning();
+      return { detail: await buildListingDetail(id), escrow: escrowRow };
+    });
 
-    const [escrow] = await db
-      .insert(escrowRecords)
-      .values({
-        listingId: id,
-        buyerId: buyer.id,
-        professionalId: listing.professionalId,
-        amountCents: listing.rateCents * listing.hoursPerWeek,
-        status: "pending_payment",
-      })
-      .returning();
-
-    const detail = await buildListingDetail(id);
     res.json({ listing: detail, escrow: { ...escrow, createdAt: escrow.createdAt.toISOString(), updatedAt: escrow.updatedAt.toISOString() } });
   } catch (err) {
     req.log.error({ err }, "bookListing error");
@@ -555,28 +555,52 @@ router.post("/listings/:listingId/bids/:bidId/accept", requireAuth, async (req, 
       res.status(403).json({ error: "Forbidden" });
       return;
     }
+    // Guard: only auction listings can have bids accepted
+    if (listing.listingType !== "auction") {
+      res.status(400).json({ error: "Only auction listings support bid acceptance" });
+      return;
+    }
+    // Guard: listing must be in a biddable state
+    if (!["open", "in_bidding"].includes(listing.status)) {
+      res.status(400).json({ error: "Listing is not in a state where bids can be accepted" });
+      return;
+    }
+
     const [bid] = await db.select().from(bids).where(and(eq(bids.id, bidId), eq(bids.listingId, listingId))).limit(1);
     if (!bid) {
       res.status(404).json({ error: "Bid not found" });
       return;
     }
+    // Guard: only pending bids can be accepted
+    if (bid.status !== "pending") {
+      res.status(400).json({ error: "Bid is no longer pending" });
+      return;
+    }
 
-    await db.update(bids).set({ status: "accepted", updatedAt: new Date() }).where(eq(bids.id, bidId));
-    await db.update(bids).set({ status: "rejected", updatedAt: new Date() }).where(and(eq(bids.listingId, listingId), eq(bids.status, "pending")));
-    await db.update(timeListings).set({ status: "committed", buyerId: bid.bidderId, updatedAt: new Date() }).where(eq(timeListings.id, listingId));
+    const { detail, escrow } = await db.transaction(async (tx) => {
+      await tx.update(bids).set({ status: "accepted", updatedAt: new Date() }).where(eq(bids.id, bidId));
+      // Reject all other pending bids on this listing
+      await tx
+        .update(bids)
+        .set({ status: "rejected", updatedAt: new Date() })
+        .where(and(eq(bids.listingId, listingId), eq(bids.status, "pending")));
+      await tx
+        .update(timeListings)
+        .set({ status: "committed", buyerId: bid.bidderId, updatedAt: new Date() })
+        .where(eq(timeListings.id, listingId));
+      const [escrowRow] = await tx
+        .insert(escrowRecords)
+        .values({
+          listingId,
+          buyerId: bid.bidderId,
+          professionalId: listing.professionalId,
+          amountCents: bid.bidRateCents * listing.hoursPerWeek,
+          status: "pending_payment",
+        })
+        .returning();
+      return { detail: await buildListingDetail(listingId), escrow: escrowRow };
+    });
 
-    const [escrow] = await db
-      .insert(escrowRecords)
-      .values({
-        listingId,
-        buyerId: bid.bidderId,
-        professionalId: listing.professionalId,
-        amountCents: bid.bidRateCents * listing.hoursPerWeek,
-        status: "pending_payment",
-      })
-      .returning();
-
-    const detail = await buildListingDetail(listingId);
     res.json({ listing: detail, escrow: { ...escrow, createdAt: escrow.createdAt.toISOString(), updatedAt: escrow.updatedAt.toISOString() } });
   } catch (err) {
     req.log.error({ err }, "acceptBid error");
