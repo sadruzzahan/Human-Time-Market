@@ -11,11 +11,14 @@ import { requireAuth } from "../middlewares/requireAuth";
 import {
   eq,
   and,
+  or,
   gte,
+  gt,
   lte,
   desc,
   asc,
   inArray,
+  isNull,
   sql,
   not,
   lt,
@@ -50,6 +53,7 @@ async function runMatchingEngine(
 
   const opposingType = orderType === "bid" ? "ask" : "bid";
 
+  const now = new Date();
   const crossingOrders = await tx
     .select()
     .from(orders)
@@ -62,13 +66,14 @@ async function runMatchingEngine(
         orderType === "bid"
           ? lte(orders.rateCents, newRate)
           : gte(orders.rateCents, newRate),
+        or(isNull(orders.expiresAt), gt(orders.expiresAt, now)),
       ),
     )
     .orderBy(
       orderType === "bid" ? asc(orders.rateCents) : desc(orders.rateCents),
       asc(orders.createdAt),
     )
-    .for("update"); // row-lock resting orders to prevent concurrent overfill
+    .for("update");
 
   let totalTradedHours = 0;
 
@@ -80,10 +85,6 @@ async function runMatchingEngine(
     const matched = Math.min(remaining, oppRemaining);
     const matchedRate = opp.rateCents; // resting order sets the price (price-time priority)
 
-    // Each trade record IS the committed contract: it canonically records
-    // the buyer (bid order owner), seller (ask order owner), matched rate,
-    // and quantity.  Downstream settlement / escrow creation should subscribe
-    // to the trades table rather than creating a separate contract artifact.
     await tx.insert(trades).values({
       bidOrderId: orderType === "bid" ? orderId : opp.id,
       askOrderId: orderType === "ask" ? orderId : opp.id,
@@ -133,6 +134,11 @@ async function runMatchingEngine(
 // Helper to build order book depth for a category
 // ---------------------------------------------------------------------------
 
+function notExpired() {
+  const now = new Date();
+  return or(isNull(orders.expiresAt), gt(orders.expiresAt, now));
+}
+
 async function buildOrderBookDepth(skillCategoryId: number) {
   const bidsRaw = await db
     .select({
@@ -146,6 +152,7 @@ async function buildOrderBookDepth(skillCategoryId: number) {
         eq(orders.skillCategoryId, skillCategoryId),
         eq(orders.orderType, "bid"),
         inArray(orders.status, ["open", "partially_filled"]),
+        notExpired(),
       ),
     )
     .groupBy(orders.rateCents)
@@ -164,6 +171,7 @@ async function buildOrderBookDepth(skillCategoryId: number) {
         eq(orders.skillCategoryId, skillCategoryId),
         eq(orders.orderType, "ask"),
         inArray(orders.status, ["open", "partially_filled"]),
+        notExpired(),
       ),
     )
     .groupBy(orders.rateCents)
@@ -214,16 +222,12 @@ router.post("/orders", requireAuth, async (req, res) => {
     const { orderType, skillCategoryId, rateCents, quantityHours, expiresAt } =
       parsed.data;
 
-    // Enforce positive-integer market integrity constraints (belt-and-suspenders
-    // over the OpenAPI minimum:1 constraint, which is not enforced by generated Zod).
     if (
       !Number.isInteger(rateCents) || rateCents < 1 ||
       !Number.isInteger(quantityHours) || quantityHours < 1 ||
       !Number.isInteger(skillCategoryId) || skillCategoryId < 1
     ) {
-      res.status(400).json({
-        error: "rateCents, quantityHours and skillCategoryId must be positive integers",
-      });
+      res.status(400).json({ error: "rateCents, quantityHours and skillCategoryId must be positive integers" });
       return;
     }
 
@@ -294,33 +298,12 @@ router.post("/orders", requireAuth, async (req, res) => {
       updatedAt: finalOrder.updatedAt.toISOString(),
     };
 
-    // Broadcast order book update via SSE
     const depth = await buildOrderBookDepth(skillCategoryId);
-    sse.broadcastCategory(skillCategoryId, "order_book_update", depth);
+    sse.broadcastCategory(skillCategoryId, "order-book", depth);
 
     if (matchResult!.tradedHours > 0) {
-      for (const t of matchResult!.trades) {
-        sse.broadcastCategory(skillCategoryId, "trade", {
-          skillCategoryId,
-          matchedRateCents: t.matchedRateCents,
-          quantityHours: t.quantityHours,
-          matchedAt: new Date().toISOString(),
-        });
-      }
-      // Also broadcast price index update
-      const latest = await db
-        .select()
-        .from(priceSnapshots)
-        .where(eq(priceSnapshots.skillCategoryId, skillCategoryId))
-        .orderBy(desc(priceSnapshots.snapshotAt))
-        .limit(1);
-      if (latest[0]) {
-        sse.broadcastCategory(skillCategoryId, "price_update", {
-          skillCategoryId,
-          vwapCents: latest[0].vwapCents,
-          volumeHours: latest[0].volumeHours,
-        });
-      }
+      const idx = await buildPriceIndex();
+      sse.broadcastGlobal("price-index", idx);
     }
 
     res.status(201).json(orderResponse);
@@ -377,7 +360,7 @@ router.delete("/orders/:orderId", requireAuth, async (req, res) => {
       .where(eq(orders.id, orderId));
 
     const depth = await buildOrderBookDepth(order.skillCategoryId);
-    sse.broadcastCategory(order.skillCategoryId, "order_book_update", depth);
+    sse.broadcastCategory(order.skillCategoryId, "order-book", depth);
 
     res.status(204).send();
   } catch (err) {
@@ -435,10 +418,9 @@ router.get("/order-book/:skillCategoryId/events", async (req, res) => {
 
   sse.subscribeCategory(skillCategoryId, res);
 
-  // Send initial snapshot immediately
   buildOrderBookDepth(skillCategoryId)
     .then((depth) => {
-      res.write(`event: order_book_update\ndata: ${JSON.stringify(depth)}\n\n`);
+      res.write(`event: order-book\ndata: ${JSON.stringify(depth)}\n\n`);
     })
     .catch(() => {});
 
@@ -458,85 +440,83 @@ router.get("/order-book/:skillCategoryId/events", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Helper — build full PriceIndexEntry[] (reused by route and SSE broadcast)
+// ---------------------------------------------------------------------------
+
+async function buildPriceIndex() {
+  const now = new Date();
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+  const allCats = await db.select().from(skillCategories);
+
+  const vwap24h = await db
+    .select({
+      skillCategoryId: priceSnapshots.skillCategoryId,
+      vwapCents: sql<number>`
+        cast(
+          sum(cast(${priceSnapshots.vwapCents} as bigint) * cast(${priceSnapshots.volumeHours} as bigint))::float
+          / nullif(sum(${priceSnapshots.volumeHours}), 0)
+        as int)`,
+      volumeHours: sql<number>`cast(sum(${priceSnapshots.volumeHours}) as int)`,
+      lastTradedAt: sql<string>`max(${priceSnapshots.snapshotAt})`,
+    })
+    .from(priceSnapshots)
+    .where(gte(priceSnapshots.snapshotAt, oneDayAgo))
+    .groupBy(priceSnapshots.skillCategoryId);
+
+  const vwapPrev24h = await db
+    .select({
+      skillCategoryId: priceSnapshots.skillCategoryId,
+      vwapCents: sql<number>`
+        cast(
+          sum(cast(${priceSnapshots.vwapCents} as bigint) * cast(${priceSnapshots.volumeHours} as bigint))::float
+          / nullif(sum(${priceSnapshots.volumeHours}), 0)
+        as int)`,
+    })
+    .from(priceSnapshots)
+    .where(
+      and(
+        gte(priceSnapshots.snapshotAt, twoDaysAgo),
+        lt(priceSnapshots.snapshotAt, oneDayAgo),
+      ),
+    )
+    .groupBy(priceSnapshots.skillCategoryId);
+
+  const vwapMap = Object.fromEntries(vwap24h.map((v) => [v.skillCategoryId, v]));
+  const prevMap = Object.fromEntries(vwapPrev24h.map((v) => [v.skillCategoryId, v]));
+
+  return allCats
+    .filter((c) => c.parentId !== null)
+    .map((cat) => {
+      const parent = allCats.find((p) => p.id === cat.parentId);
+      const data = vwapMap[cat.id];
+      const prev = prevMap[cat.id];
+      const change24hCents =
+        data?.vwapCents != null && prev?.vwapCents != null
+          ? Number(data.vwapCents) - Number(prev.vwapCents)
+          : null;
+      return {
+        skillCategoryId: cat.id,
+        skillCategoryName: cat.name,
+        skillCategorySlug: cat.slug,
+        parentId: cat.parentId,
+        parentName: parent?.name ?? null,
+        vwapCents: data?.vwapCents != null ? Number(data.vwapCents) : null,
+        volumeHours24h: data?.volumeHours != null ? Number(data.volumeHours) : 0,
+        change24hCents,
+        lastTradedAt: data?.lastTradedAt ?? null,
+      };
+    });
+}
+
+// ---------------------------------------------------------------------------
 // GET /price-index — current VWAP per skill category (public)
 // ---------------------------------------------------------------------------
 
 router.get("/price-index", async (_req, res) => {
   try {
-    const now = new Date();
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-
-    const allCats = await db.select().from(skillCategories);
-
-    // VWAP for last 24h and 24h-48h window per category
-    const vwap24h = await db
-      .select({
-        skillCategoryId: priceSnapshots.skillCategoryId,
-        vwapCents: sql<number>`
-          cast(
-            sum(cast(${priceSnapshots.vwapCents} as bigint) * cast(${priceSnapshots.volumeHours} as bigint))::float
-            / nullif(sum(${priceSnapshots.volumeHours}), 0)
-          as int)`,
-        volumeHours: sql<number>`cast(sum(${priceSnapshots.volumeHours}) as int)`,
-        lastTradedAt: sql<string>`max(${priceSnapshots.snapshotAt})`,
-      })
-      .from(priceSnapshots)
-      .where(gte(priceSnapshots.snapshotAt, oneDayAgo))
-      .groupBy(priceSnapshots.skillCategoryId);
-
-    const vwapPrev24h = await db
-      .select({
-        skillCategoryId: priceSnapshots.skillCategoryId,
-        vwapCents: sql<number>`
-          cast(
-            sum(cast(${priceSnapshots.vwapCents} as bigint) * cast(${priceSnapshots.volumeHours} as bigint))::float
-            / nullif(sum(${priceSnapshots.volumeHours}), 0)
-          as int)`,
-      })
-      .from(priceSnapshots)
-      .where(
-        and(
-          gte(priceSnapshots.snapshotAt, twoDaysAgo),
-          lt(priceSnapshots.snapshotAt, oneDayAgo),
-        ),
-      )
-      .groupBy(priceSnapshots.skillCategoryId);
-
-    const vwapMap = Object.fromEntries(
-      vwap24h.map((v) => [v.skillCategoryId, v]),
-    );
-    const prevMap = Object.fromEntries(
-      vwapPrev24h.map((v) => [v.skillCategoryId, v]),
-    );
-
-    // Include parent categories as display groups and child categories as tradeable
-    const result = allCats
-      .filter((c) => c.parentId !== null) // only leaf/child categories
-      .map((cat) => {
-        const parent = allCats.find((p) => p.id === cat.parentId);
-        const data = vwapMap[cat.id];
-        const prev = prevMap[cat.id];
-
-        let change24hCents: number | null = null;
-        if (data?.vwapCents != null && prev?.vwapCents != null) {
-          change24hCents = Number(data.vwapCents) - Number(prev.vwapCents);
-        }
-
-        return {
-          skillCategoryId: cat.id,
-          skillCategoryName: cat.name,
-          skillCategorySlug: cat.slug,
-          parentId: cat.parentId,
-          parentName: parent?.name ?? null,
-          vwapCents: data?.vwapCents != null ? Number(data.vwapCents) : null,
-          volumeHours24h: data?.volumeHours != null ? Number(data.volumeHours) : 0,
-          change24hCents,
-          lastTradedAt: data?.lastTradedAt ?? null,
-        };
-      });
-
-    res.json(result);
+    res.json(await buildPriceIndex());
   } catch (err) {
     console.error("GET /price-index error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -594,7 +574,7 @@ router.get("/price-history/:skillCategoryId", async (req, res) => {
 // GET /price-index/events — global SSE stream for all categories
 // ---------------------------------------------------------------------------
 
-router.get("/price-index/events", (_req, res) => {
+router.get("/price-index/events", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -602,6 +582,12 @@ router.get("/price-index/events", (_req, res) => {
   res.flushHeaders();
 
   sse.subscribeGlobal(res);
+
+  buildPriceIndex()
+    .then((idx) => {
+      res.write(`event: price-index\ndata: ${JSON.stringify(idx)}\n\n`);
+    })
+    .catch(() => {});
 
   const ping = setInterval(() => {
     try {
@@ -611,7 +597,7 @@ router.get("/price-index/events", (_req, res) => {
     }
   }, 25_000);
 
-  _req.on("close", () => {
+  req.on("close", () => {
     clearInterval(ping);
     sse.unsubscribeGlobal(res);
   });

@@ -7,7 +7,7 @@ function sendEvent(res: Response, event: string, data: unknown): void {
   try {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   } catch {
-    // Client disconnected — will be cleaned up on 'close' event
+    // client disconnected — cleaned up on 'close'
   }
 }
 
@@ -30,23 +30,13 @@ export function unsubscribeGlobal(res: Response): void {
   globalClients.delete(res);
 }
 
-export function broadcastCategory(
-  skillCategoryId: number,
-  event: string,
-  data: unknown,
-): void {
+export function broadcastCategory(skillCategoryId: number, event: string, data: unknown): void {
   const subs = categoryClients.get(skillCategoryId);
   if (subs) {
     for (const res of subs) sendEvent(res, event, data);
   }
-  for (const res of globalClients) {
-    sendEvent(res, event, { skillCategoryId, ...(data as object) });
-  }
 }
 
-export function broadcastAll(event: string, data: unknown): void {
-  for (const subs of categoryClients.values()) {
-    for (const res of subs) sendEvent(res, event, data);
-  }
+export function broadcastGlobal(event: string, data: unknown): void {
   for (const res of globalClients) sendEvent(res, event, data);
 }
