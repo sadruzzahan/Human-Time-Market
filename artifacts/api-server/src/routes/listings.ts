@@ -103,39 +103,42 @@ router.get("/listings", async (req, res) => {
       startDateAfter,
       experienceLevel,
       timezone,
+      professionalId,
       limit = 20,
       offset = 0,
     } = params.data;
 
+    // All filters pushed into SQL so that pagination totals are always accurate
     const filters: SQL[] = [eq(timeListings.status, statusFilter ?? "open")];
     if (skillCategoryId) filters.push(eq(timeListings.skillCategoryId, skillCategoryId));
     if (listingType) filters.push(eq(timeListings.listingType, listingType));
     if (minRateCents) filters.push(gte(timeListings.rateCents, minRateCents));
     if (maxRateCents) filters.push(lte(timeListings.rateCents, maxRateCents));
     if (startDateAfter) filters.push(gte(timeListings.startDate, toDateStr(startDateAfter)!));
+    if (professionalId) filters.push(eq(timeListings.professionalId, professionalId));
+    // experienceLevel and timezone filter via joined professionalProfiles table
+    if (experienceLevel) filters.push(eq(professionalProfiles.experienceLevel, experienceLevel));
+    if (timezone) filters.push(eq(professionalProfiles.timezone, timezone));
 
     const where = and(...filters);
 
+    // Count and data queries both use the same JOIN so totals match paginated rows
     const [{ value: total }] = await db
       .select({ value: count() })
       .from(timeListings)
+      .innerJoin(users, eq(timeListings.professionalId, users.id))
+      .leftJoin(professionalProfiles, eq(timeListings.professionalId, professionalProfiles.userId))
       .where(where);
 
     const rows = await db
       .select()
       .from(timeListings)
       .innerJoin(users, eq(timeListings.professionalId, users.id))
+      .leftJoin(professionalProfiles, eq(timeListings.professionalId, professionalProfiles.userId))
       .where(where)
       .orderBy(desc(timeListings.createdAt))
       .limit(limit)
       .offset(offset);
-
-    const profIds = rows.map((r) => r.time_listings.professionalId);
-    const profProfiles =
-      profIds.length > 0
-        ? await db.select().from(professionalProfiles).where(inArray(professionalProfiles.userId, profIds))
-        : [];
-    const profileMap = Object.fromEntries(profProfiles.map((p) => [p.userId, p]));
 
     const catIds = [...new Set(rows.map((r) => r.time_listings.skillCategoryId))];
     const cats = catIds.length > 0 ? await db.select().from(skillCategories).where(inArray(skillCategories.id, catIds)) : [];
@@ -156,17 +159,7 @@ router.get("/listings", async (req, res) => {
         : [];
     const bidCountMap = Object.fromEntries(bidCounts.map((b) => [b.listingId, b.cnt]));
 
-    let filteredRows = rows;
-    if (experienceLevel || timezone) {
-      filteredRows = rows.filter((r) => {
-        const profile = profileMap[r.time_listings.professionalId];
-        if (experienceLevel && profile?.experienceLevel !== experienceLevel) return false;
-        if (timezone && profile?.timezone !== timezone) return false;
-        return true;
-      });
-    }
-
-    const items = filteredRows.map(({ time_listings: l, users: u }) => {
+    const items = rows.map(({ time_listings: l, users: u, professional_profiles: pp }) => {
       const cat = catMap[l.skillCategoryId];
       return {
         id: l.id,
@@ -182,8 +175,8 @@ router.get("/listings", async (req, res) => {
         status: l.status,
         professionalId: l.professionalId,
         professionalDisplayName: u.displayName,
-        professionalExperienceLevel: profileMap[l.professionalId]?.experienceLevel ?? "mid",
-        professionalTimezone: profileMap[l.professionalId]?.timezone ?? null,
+        professionalExperienceLevel: pp?.experienceLevel ?? "mid",
+        professionalTimezone: pp?.timezone ?? null,
         bidCount: bidCountMap[l.id] ?? 0,
         createdAt: l.createdAt.toISOString(),
       };

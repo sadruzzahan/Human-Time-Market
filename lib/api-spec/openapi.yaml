@@ -208,6 +208,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: professionalId
+          in: query
+          schema:
+            type: integer
         - name: limit
           in: query
           schema:
@@ -1087,6 +1091,8 @@ components:
           $ref: "#/components/schemas/RfpStatus"
         buyerId:
           type: integer
+        buyerClerkId:
+          type: string
         buyerDisplayName:
           type: string
         responses:
@@ -1111,6 +1117,7 @@ components:
         - deadline
         - status
         - buyerId
+        - buyerClerkId
         - buyerDisplayName
         - responses
         - createdAt

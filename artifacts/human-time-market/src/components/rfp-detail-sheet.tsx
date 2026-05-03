@@ -48,9 +48,9 @@ export default function RfpDetailSheet({ rfpId, onClose }: Props) {
     },
   });
 
-  const isOwner = rfp?.buyerId !== undefined && rfp?.buyerDisplayName !== undefined && false;
+  const isOwner = !!rfp && !!clerkUserId && rfp.buyerClerkId === clerkUserId;
   const alreadyResponded = rfp?.responses.some((r) => r.professionalClerkId === clerkUserId);
-  const canRespond = isSignedIn && rfp?.status === "open" && !alreadyResponded;
+  const canRespond = isSignedIn && rfp?.status === "open" && !alreadyResponded && !isOwner;
 
   return (
     <>

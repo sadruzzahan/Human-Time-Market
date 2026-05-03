@@ -1,9 +1,10 @@
 import { useState, useCallback } from "react";
 import { Link } from "wouter";
-import { useListListings, useListSkillCategories, ListingType, ListingStatus, type ListingSummary } from "@workspace/api-client-react";
+import { useListListings, useListSkillCategories, ListingType, ListingStatus, ExperienceLevel, type ListingSummary } from "@workspace/api-client-react";
 import { useAuth } from "@clerk/react";
 import Navbar from "@/components/navbar";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,6 +21,7 @@ import {
   ChevronRight,
   FileSearch,
   Users,
+  X,
 } from "lucide-react";
 import CreateListingSheet from "@/components/create-listing-sheet";
 import CreateRfpSheet from "@/components/create-rfp-sheet";
@@ -121,6 +123,11 @@ export default function Marketplace() {
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>();
   const [selectedType, setSelectedType] = useState<string | undefined>();
   const [selectedStatus, setSelectedStatus] = useState<string>("open");
+  const [selectedExperience, setSelectedExperience] = useState<string | undefined>();
+  const [selectedTimezone, setSelectedTimezone] = useState<string>("");
+  const [minRate, setMinRate] = useState<string>("");
+  const [maxRate, setMaxRate] = useState<string>("");
+  const [availableFrom, setAvailableFrom] = useState<string>("");
   const [page, setPage] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [createListingOpen, setCreateListingOpen] = useState(false);
@@ -128,13 +135,31 @@ export default function Marketplace() {
 
   const { data: categories } = useListSkillCategories();
 
+  const activeFilterCount = [selectedExperience, selectedTimezone, minRate, maxRate, availableFrom, selectedType, selectedCategory !== undefined ? String(selectedCategory) : ""].filter(Boolean).length;
+
   const params = {
     skillCategoryId: selectedCategory,
     listingType: selectedType as typeof ListingType[keyof typeof ListingType] | undefined,
     status: selectedStatus as typeof ListingStatus[keyof typeof ListingStatus],
+    experienceLevel: selectedExperience as typeof ExperienceLevel[keyof typeof ExperienceLevel] | undefined,
+    timezone: selectedTimezone || undefined,
+    minRateCents: minRate ? Math.round(parseFloat(minRate) * 100) : undefined,
+    maxRateCents: maxRate ? Math.round(parseFloat(maxRate) * 100) : undefined,
+    startDateAfter: availableFrom || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
   };
+
+  function resetFilters() {
+    setSelectedCategory(undefined);
+    setSelectedType(undefined);
+    setSelectedExperience(undefined);
+    setSelectedTimezone("");
+    setMinRate("");
+    setMaxRate("");
+    setAvailableFrom("");
+    setPage(0);
+  }
 
   const { data: listingsPage, isLoading } = useListListings(params);
   const listings = listingsPage?.items ?? [];
@@ -245,23 +270,116 @@ export default function Marketplace() {
             </div>
 
             {showFilters && (
-              <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-card border border-border rounded-sm">
-                <Select
-                  value={selectedType ?? "all"}
-                  onValueChange={(v) => handleTypeSelect(v === "all" ? undefined : v)}
-                >
-                  <SelectTrigger className="w-36 h-7 font-mono text-xs bg-background" data-testid="select-type">
-                    <SelectValue placeholder="All types" />
-                  </SelectTrigger>
-                  <SelectContent className="font-mono text-xs">
-                    <SelectItem value="all">ALL TYPES</SelectItem>
-                    <SelectItem value="fixed_rate">FIXED RATE</SelectItem>
-                    <SelectItem value="auction">AUCTION</SelectItem>
-                    <SelectItem value="emergency">EMERGENCY</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="mb-4 p-3 bg-card border border-border rounded-sm space-y-3">
+                {/* Row 1: type + experience level + listing type chips */}
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label className="font-mono text-[10px] text-muted-foreground uppercase">Listing Type</Label>
+                    <Select
+                      value={selectedType ?? "all"}
+                      onValueChange={(v) => handleTypeSelect(v === "all" ? undefined : v)}
+                    >
+                      <SelectTrigger className="w-36 h-7 font-mono text-xs bg-background" data-testid="select-type">
+                        <SelectValue placeholder="All types" />
+                      </SelectTrigger>
+                      <SelectContent className="font-mono text-xs">
+                        <SelectItem value="all">ALL TYPES</SelectItem>
+                        <SelectItem value="fixed_rate">FIXED RATE</SelectItem>
+                        <SelectItem value="auction">AUCTION</SelectItem>
+                        <SelectItem value="emergency">EMERGENCY</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="flex items-center gap-1 flex-wrap">
+                  <div className="flex flex-col gap-1">
+                    <Label className="font-mono text-[10px] text-muted-foreground uppercase">Experience</Label>
+                    <Select
+                      value={selectedExperience ?? "all"}
+                      onValueChange={(v) => { setSelectedExperience(v === "all" ? undefined : v); setPage(0); }}
+                    >
+                      <SelectTrigger className="w-36 h-7 font-mono text-xs bg-background" data-testid="select-experience">
+                        <SelectValue placeholder="Any level" />
+                      </SelectTrigger>
+                      <SelectContent className="font-mono text-xs">
+                        <SelectItem value="all">ANY LEVEL</SelectItem>
+                        <SelectItem value="junior">JUNIOR</SelectItem>
+                        <SelectItem value="mid">MID</SelectItem>
+                        <SelectItem value="senior">SENIOR</SelectItem>
+                        <SelectItem value="principal">PRINCIPAL</SelectItem>
+                        <SelectItem value="expert">EXPERT</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <Label className="font-mono text-[10px] text-muted-foreground uppercase">Available From</Label>
+                    <Input
+                      type="date"
+                      value={availableFrom}
+                      onChange={(e) => { setAvailableFrom(e.target.value); setPage(0); }}
+                      className="w-36 h-7 font-mono text-xs bg-background"
+                      data-testid="input-available-from"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <Label className="font-mono text-[10px] text-muted-foreground uppercase">Timezone</Label>
+                    <Input
+                      placeholder="e.g. America/New_York"
+                      value={selectedTimezone}
+                      onChange={(e) => { setSelectedTimezone(e.target.value); setPage(0); }}
+                      className="w-44 h-7 font-mono text-xs bg-background"
+                      data-testid="input-timezone"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: rate range */}
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label className="font-mono text-[10px] text-muted-foreground uppercase">Min Rate ($/hr)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="0"
+                      value={minRate}
+                      onChange={(e) => { setMinRate(e.target.value); setPage(0); }}
+                      className="w-28 h-7 font-mono text-xs bg-background"
+                      data-testid="input-min-rate"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label className="font-mono text-[10px] text-muted-foreground uppercase">Max Rate ($/hr)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="∞"
+                      value={maxRate}
+                      onChange={(e) => { setMaxRate(e.target.value); setPage(0); }}
+                      className="w-28 h-7 font-mono text-xs bg-background"
+                      data-testid="input-max-rate"
+                    />
+                  </div>
+
+                  {activeFilterCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 font-mono text-xs gap-1 text-muted-foreground hover:text-foreground"
+                      onClick={resetFilters}
+                      data-testid="btn-reset-filters"
+                    >
+                      <X className="h-3 w-3" />
+                      CLEAR FILTERS
+                    </Button>
+                  )}
+                </div>
+
+                {/* Row 3: skill category chips */}
+                <div className="flex items-center gap-1 flex-wrap pt-1 border-t border-border">
+                  <span className="font-mono text-[10px] text-muted-foreground uppercase mr-1">Category:</span>
                   <button
                     onClick={() => handleCategorySelect(undefined)}
                     className={`font-mono text-[10px] px-2 py-1 rounded-sm border transition-colors ${
@@ -269,6 +387,7 @@ export default function Marketplace() {
                         ? "bg-primary/20 border-primary text-primary"
                         : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
                     }`}
+                    data-testid="chip-category-all"
                   >
                     ALL
                   </button>
@@ -281,6 +400,7 @@ export default function Marketplace() {
                           ? "bg-primary/20 border-primary text-primary"
                           : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
                       }`}
+                      data-testid={`chip-category-${cat.id}`}
                     >
                       {cat.name.toUpperCase()}
                     </button>

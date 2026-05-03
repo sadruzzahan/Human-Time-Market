@@ -49,6 +49,7 @@ async function buildRfpDetail(rfpId: number) {
     deadline: rfp.deadline,
     status: rfp.status,
     buyerId: rfp.buyerId,
+    buyerClerkId: buyer?.clerkId ?? "",
     buyerDisplayName: buyer?.displayName ?? "",
     responses: responses.map(({ rfp_responses: r, users: u }) => ({
       id: r.id,

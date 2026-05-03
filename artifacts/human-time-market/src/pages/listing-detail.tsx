@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
   useGetListing,
+  useListListings,
   usePlaceBid,
   useBookListing,
   useAcceptBid,
@@ -48,6 +49,8 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
+  Timer,
+  History,
 } from "lucide-react";
 
 const TYPE_META: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -126,6 +129,33 @@ export default function ListingDetail() {
   const { data: listing, isLoading, error } = useGetListing(listingId, {
     query: { queryKey: getGetListingQueryKey(listingId), enabled: !!listingId },
   });
+
+  // Delivery history: completed listings from the same professional
+  const deliveryParams = { professionalId: listing?.professionalId, status: "completed" as const, limit: 5 };
+  const { data: deliveryPage } = useListListings(
+    deliveryParams,
+    { query: { queryKey: getListListingsQueryKey(deliveryParams), enabled: !!listing?.professionalId } },
+  );
+  const deliveryHistory = deliveryPage?.items ?? [];
+
+  // Auction countdown: tick every second while the auction is open
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (listing?.listingType !== "auction") return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [listing?.listingType]);
+
+  function formatCountdown(target: string): string {
+    const ms = new Date(target).getTime() - now;
+    if (ms <= 0) return "Auction closed";
+    const d = Math.floor(ms / (1000 * 60 * 60 * 24));
+    const h = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const m = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    const s = Math.floor((ms % (1000 * 60)) / 1000);
+    if (d > 0) return `${d}d ${h}h ${m}m remaining`;
+    return `${h}h ${m}m ${s}s remaining`;
+  }
 
   const [bidRateDollars, setBidRateDollars] = useState("");
   const [bidMessage, setBidMessage] = useState("");
@@ -289,6 +319,21 @@ export default function ListingDetail() {
               </div>
             </div>
 
+            {listing.listingType === "auction" && (
+              <div className="p-3 rounded-sm border border-yellow-400/30 bg-yellow-400/5 flex items-center gap-2">
+                <Timer className="h-4 w-4 text-yellow-400 shrink-0" />
+                <div>
+                  <p className="text-[10px] font-mono text-yellow-400/70 uppercase">Auction closes</p>
+                  <p className="font-mono font-semibold text-yellow-400 text-sm" data-testid="auction-countdown">
+                    {formatCountdown(listing.startDate)}
+                  </p>
+                  <p className="text-[10px] font-mono text-muted-foreground">
+                    Availability begins {new Date(listing.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {listing.listingType === "auction" && listing.bids.length > 0 && (
               <div>
                 <h2 className="font-mono text-xs font-semibold text-muted-foreground uppercase mb-3">
@@ -306,6 +351,38 @@ export default function ListingDetail() {
                 </div>
               </div>
             )}
+
+            <div>
+              <div className="flex items-center gap-1.5 mb-3">
+                <History className="h-3.5 w-3.5 text-muted-foreground" />
+                <h2 className="font-mono text-xs font-semibold text-muted-foreground uppercase">
+                  Delivery History
+                </h2>
+              </div>
+              {deliveryHistory.length === 0 ? (
+                <div className="p-3 rounded-sm border border-border bg-card text-xs font-mono text-muted-foreground text-center">
+                  No completed engagements yet
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {deliveryHistory.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between p-3 bg-card border border-border rounded-sm">
+                      <div>
+                        <p className="font-mono text-xs font-medium text-foreground line-clamp-1">{item.title}</p>
+                        <p className="font-mono text-[10px] text-muted-foreground">
+                          {new Date(item.startDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })} –{" "}
+                          {new Date(item.endDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-xs font-bold text-primary">${(item.rateCents / 100).toLocaleString()}/hr</p>
+                        <p className="font-mono text-[10px] text-emerald-400 uppercase">Completed</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {listing.escrow && (
               <div className="p-4 rounded-sm border border-blue-400/30 bg-blue-400/5">

@@ -305,6 +305,7 @@ export interface RfpDetail {
   deadline: string;
   status: RfpStatus;
   buyerId: number;
+  buyerClerkId: string;
   buyerDisplayName: string;
   responses: RfpResponseDetail[];
   createdAt: string;
@@ -342,6 +343,7 @@ export type ListListingsParams = {
   startDateAfter?: string;
   experienceLevel?: ExperienceLevel;
   timezone?: string;
+  professionalId?: number;
   limit?: number;
   offset?: number;
 };

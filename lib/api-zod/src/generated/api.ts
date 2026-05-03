@@ -173,6 +173,7 @@ export const ListListingsQueryParams = zod.object({
     .enum(["junior", "mid", "senior", "principal", "expert"])
     .optional(),
   timezone: zod.coerce.string().optional(),
+  professionalId: zod.coerce.number().optional(),
   limit: zod.coerce.number().default(listListingsQueryLimitDefault),
   offset: zod.coerce.number().default(listListingsQueryOffsetDefault),
 });
@@ -713,6 +714,7 @@ export const GetRfpResponse = zod.object({
   deadline: zod.coerce.date(),
   status: zod.enum(["open", "closed", "fulfilled"]),
   buyerId: zod.number(),
+  buyerClerkId: zod.string(),
   buyerDisplayName: zod.string(),
   responses: zod.array(
     zod.object({
