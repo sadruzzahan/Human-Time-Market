@@ -152,8 +152,39 @@ export const bundleItems = pgTable(
   }),
 );
 
+export const derivativeTradeTypeEnum = [
+  "secondary_purchase",
+  "option_exercise",
+  "swap_completion",
+  "bundle_purchase",
+] as const;
+export type DerivativeTradeType = (typeof derivativeTradeTypeEnum)[number];
+
+export const derivativeTrades = pgTable(
+  "derivative_trades",
+  {
+    id: serial("id").primaryKey(),
+    tradeType: text("trade_type", { enum: derivativeTradeTypeEnum }).notNull(),
+    skillCategoryId: integer("skill_category_id")
+      .notNull()
+      .references(() => skillCategories.id),
+    rateCents: integer("rate_cents").notNull(),
+    volumeHours: integer("volume_hours").notNull(),
+    buyerId: integer("buyer_id").references(() => users.id),
+    sellerId: integer("seller_id").references(() => users.id),
+    refId: integer("ref_id"),
+    tradedAt: timestamp("traded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    skillCategoryIdx: index("derivative_trades_skill_category_idx").on(table.skillCategoryId),
+    tradeTypeIdx: index("derivative_trades_type_idx").on(table.tradeType),
+    tradedAtIdx: index("derivative_trades_traded_at_idx").on(table.tradedAt),
+  }),
+);
+
 export type SecondaryListing = typeof secondaryListings.$inferSelect;
 export type TimeOption = typeof timeOptions.$inferSelect;
 export type TimeSwap = typeof timeSwaps.$inferSelect;
 export type Bundle = typeof bundles.$inferSelect;
 export type BundleItem = typeof bundleItems.$inferSelect;
+export type DerivativeTrade = typeof derivativeTrades.$inferSelect;

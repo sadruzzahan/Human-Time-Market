@@ -10,9 +10,10 @@ import {
   bundles,
   bundleItems,
   priceSnapshots,
+  derivativeTrades,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
-import { eq, and, or, desc, count, sql } from "drizzle-orm";
+import { eq, and, or, desc, count, sql, inArray } from "drizzle-orm";
 import {
   CreateSecondaryListingBody,
   CreateOptionBody,
@@ -29,6 +30,34 @@ async function getDbUser(clerkId: string) {
   const [user] = await db.select().from(users).where(eq(users.clerkId, clerkId)).limit(1);
   return user ?? null;
 }
+
+// ---------------------------------------------------------------------------
+// Trade history helper
+// ---------------------------------------------------------------------------
+
+async function recordDerivativeTrade(
+  tradeType: typeof derivativeTrades.$inferInsert["tradeType"],
+  skillCategoryId: number,
+  rateCents: number,
+  volumeHours: number,
+  opts: { buyerId?: number; sellerId?: number; refId?: number } = {},
+) {
+  await db.insert(derivativeTrades).values({
+    tradeType,
+    skillCategoryId,
+    rateCents,
+    volumeHours,
+    buyerId: opts.buyerId ?? null,
+    sellerId: opts.sellerId ?? null,
+    refId: opts.refId ?? null,
+  });
+  // Also record price snapshot for market indexing
+  await db.insert(priceSnapshots).values({ skillCategoryId, vwapCents: rateCents, volumeHours });
+}
+
+// ---------------------------------------------------------------------------
+// Detail builders
+// ---------------------------------------------------------------------------
 
 async function buildSecondaryListingDetail(id: number) {
   const [sl] = await db.select().from(secondaryListings).where(eq(secondaryListings.id, id)).limit(1);
@@ -103,16 +132,8 @@ async function buildSwapDetail(id: number) {
   const [cpListing] = swap.counterpartyListingId
     ? await db.select().from(timeListings).where(eq(timeListings.id, swap.counterpartyListingId)).limit(1)
     : [null];
-  const [proposerSkill] = await db
-    .select()
-    .from(skillCategories)
-    .where(eq(skillCategories.id, swap.proposerSkillCategoryId))
-    .limit(1);
-  const [cpSkill] = await db
-    .select()
-    .from(skillCategories)
-    .where(eq(skillCategories.id, swap.counterpartySkillCategoryId))
-    .limit(1);
+  const [proposerSkill] = await db.select().from(skillCategories).where(eq(skillCategories.id, swap.proposerSkillCategoryId)).limit(1);
+  const [cpSkill] = await db.select().from(skillCategories).where(eq(skillCategories.id, swap.counterpartySkillCategoryId)).limit(1);
 
   return {
     id: swap.id,
@@ -182,6 +203,10 @@ async function buildBundleDetail(id: number) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Secondary market
+// ---------------------------------------------------------------------------
+
 router.get("/secondary-market", async (req, res) => {
   const parsed = ListSecondaryListingsQueryParams.safeParse(req.query);
   const { skillCategoryId, limit = 20, offset = 0 } = parsed.success ? parsed.data : req.query as { skillCategoryId?: number; limit?: number; offset?: number };
@@ -197,13 +222,7 @@ router.get("/secondary-market", async (req, res) => {
     const whereClause = categoryFilter ? and(baseCondition, categoryFilter) : baseCondition;
 
     const [{ total }] = await db.select({ total: count() }).from(secondaryListings).where(whereClause);
-    const rows = await db
-      .select()
-      .from(secondaryListings)
-      .where(whereClause)
-      .orderBy(desc(secondaryListings.listedAt))
-      .limit(lim)
-      .offset(off);
+    const rows = await db.select().from(secondaryListings).where(whereClause).orderBy(desc(secondaryListings.listedAt)).limit(lim).offset(off);
 
     const items = (await Promise.all(rows.map((r) => buildSecondaryListingDetail(r.id)))).filter(Boolean);
     res.json({ items, total, limit: lim, offset: off });
@@ -216,10 +235,7 @@ router.get("/secondary-market", async (req, res) => {
 router.post("/secondary-market", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   const parsed = CreateSecondaryListingBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
   try {
     const user = await getDbUser(clerkId);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
@@ -230,15 +246,11 @@ router.post("/secondary-market", requireAuth, async (req, res) => {
     if (listing.buyerId !== user.id) { res.status(403).json({ error: "Only the contract buyer can list it for resale" }); return; }
     if (listing.status !== "committed") { res.status(400).json({ error: "Only committed contracts can be listed for resale" }); return; }
 
-    const existing = await db
-      .select()
-      .from(secondaryListings)
-      .where(and(eq(secondaryListings.originalListingId, body.originalListingId), eq(secondaryListings.status, "open")))
-      .limit(1);
+    const existing = await db.select().from(secondaryListings)
+      .where(and(eq(secondaryListings.originalListingId, body.originalListingId), eq(secondaryListings.status, "open"))).limit(1);
     if (existing.length > 0) { res.status(400).json({ error: "This contract is already listed for resale" }); return; }
 
-    const [created] = await db
-      .insert(secondaryListings)
+    const [created] = await db.insert(secondaryListings)
       .values({ originalListingId: body.originalListingId, sellerId: user.id, askPriceCents: body.askPriceCents })
       .returning();
 
@@ -274,23 +286,22 @@ router.post("/secondary-market/:id/purchase", requireAuth, async (req, res) => {
     if (sl.status !== "open") { res.status(400).json({ error: "This secondary listing is no longer available" }); return; }
     if (sl.sellerId === user.id) { res.status(400).json({ error: "Cannot purchase your own secondary listing" }); return; }
 
-    await db
-      .update(secondaryListings)
-      .set({ status: "sold", buyerId: user.id, soldAt: new Date() })
-      .where(eq(secondaryListings.id, id));
-    await db
-      .update(timeListings)
-      .set({ buyerId: user.id, updatedAt: new Date() })
-      .where(eq(timeListings.id, sl.originalListingId));
-
-    // Record price signal for the skill category
+    // Load original listing before updating
     const [origListing] = await db.select().from(timeListings).where(eq(timeListings.id, sl.originalListingId)).limit(1);
+
+    await db.transaction(async (tx) => {
+      await tx.update(secondaryListings).set({ status: "sold", buyerId: user.id, soldAt: new Date() }).where(eq(secondaryListings.id, id));
+      await tx.update(timeListings).set({ buyerId: user.id, updatedAt: new Date() }).where(eq(timeListings.id, sl.originalListingId));
+    });
+
     if (origListing?.skillCategoryId && origListing.rateCents && origListing.hoursPerWeek) {
-      await db.insert(priceSnapshots).values({
-        skillCategoryId: origListing.skillCategoryId,
-        vwapCents: origListing.rateCents,
-        volumeHours: origListing.hoursPerWeek,
-      });
+      await recordDerivativeTrade(
+        "secondary_purchase",
+        origListing.skillCategoryId,
+        origListing.rateCents,
+        origListing.hoursPerWeek,
+        { buyerId: user.id, sellerId: sl.sellerId, refId: id },
+      );
     }
 
     const detail = await buildSecondaryListingDetail(id);
@@ -322,6 +333,10 @@ router.delete("/secondary-market/:id", requireAuth, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Options
+// ---------------------------------------------------------------------------
+
 router.get("/options", async (req, res) => {
   const parsed = ListOptionsQueryParams.safeParse(req.query);
   const { skillCategoryId, limit = 20, offset = 0 } = parsed.success ? parsed.data : req.query as { skillCategoryId?: number; limit?: number; offset?: number };
@@ -335,13 +350,7 @@ router.get("/options", async (req, res) => {
       : baseCondition;
 
     const [{ total }] = await db.select({ total: count() }).from(timeOptions).where(whereClause);
-    const rows = await db
-      .select()
-      .from(timeOptions)
-      .where(whereClause)
-      .orderBy(desc(timeOptions.createdAt))
-      .limit(lim)
-      .offset(off);
+    const rows = await db.select().from(timeOptions).where(whereClause).orderBy(desc(timeOptions.createdAt)).limit(lim).offset(off);
 
     const items = (await Promise.all(rows.map((r) => buildOptionDetail(r.id)))).filter(Boolean);
     res.json({ items, total, limit: lim, offset: off });
@@ -354,31 +363,24 @@ router.get("/options", async (req, res) => {
 router.post("/options", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   const parsed = CreateOptionBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
   try {
     const user = await getDbUser(clerkId);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
     const body = parsed.data;
     const toDateStr = (d: Date) => d.toISOString().split("T")[0];
-    // Auto-compute premium as 10% of (fullRateCents × hours) if not supplied
     const premiumCents = body.premiumCents ?? Math.ceil(body.fullRateCents * body.hours * 0.10);
-    const [created] = await db
-      .insert(timeOptions)
-      .values({
-        professionalId: user.id,
-        skillCategoryId: body.skillCategoryId,
-        hours: body.hours,
-        windowStart: toDateStr(body.windowStart),
-        windowEnd: toDateStr(body.windowEnd),
-        premiumCents,
-        fullRateCents: body.fullRateCents,
-        expiresAt: body.expiresAt ?? undefined,
-      })
-      .returning();
+    const [created] = await db.insert(timeOptions).values({
+      professionalId: user.id,
+      skillCategoryId: body.skillCategoryId,
+      hours: body.hours,
+      windowStart: toDateStr(body.windowStart),
+      windowEnd: toDateStr(body.windowEnd),
+      premiumCents,
+      fullRateCents: body.fullRateCents,
+      expiresAt: body.expiresAt ?? undefined,
+    }).returning();
 
     const detail = await buildOptionDetail(created.id);
     res.status(201).json(detail);
@@ -413,6 +415,16 @@ router.post("/options/:id/purchase", requireAuth, async (req, res) => {
     if (opt.professionalId === user.id) { res.status(400).json({ error: "Cannot purchase your own option" }); return; }
 
     await db.update(timeOptions).set({ status: "purchased", holderId: user.id, updatedAt: new Date() }).where(eq(timeOptions.id, id));
+
+    // Record premium payment as a trade signal (premium price, not full rate)
+    await recordDerivativeTrade(
+      "option_exercise",
+      opt.skillCategoryId,
+      opt.premiumCents,
+      opt.hours,
+      { buyerId: user.id, sellerId: opt.professionalId, refId: id },
+    );
+
     const detail = await buildOptionDetail(id);
     res.json(detail);
   } catch (err) {
@@ -438,20 +450,37 @@ router.post("/options/:id/exercise", requireAuth, async (req, res) => {
       return;
     }
 
-    await db
-      .update(timeOptions)
+    const [skillCat] = await db.select().from(skillCategories).where(eq(skillCategories.id, opt.skillCategoryId)).limit(1);
+
+    // Exercise: mark option + create a real committed engagement
+    const [newListing] = await db.insert(timeListings).values({
+      professionalId: opt.professionalId,
+      skillCategoryId: opt.skillCategoryId,
+      title: `Option: ${skillCat?.name ?? "Time"} · ${opt.hours}h (${opt.windowStart}–${opt.windowEnd})`,
+      listingType: "fixed_rate",
+      rateCents: opt.fullRateCents,
+      hoursPerWeek: opt.hours,
+      startDate: opt.windowStart,
+      endDate: opt.windowEnd,
+      status: "committed",
+      buyerId: user.id,
+    }).returning();
+
+    await db.update(timeOptions)
       .set({ status: "exercised", exercisedAt: new Date(), updatedAt: new Date() })
       .where(eq(timeOptions.id, id));
 
-    // Record price signal: option exercise confirms the full rate for this skill
-    await db.insert(priceSnapshots).values({
-      skillCategoryId: opt.skillCategoryId,
-      vwapCents: opt.fullRateCents,
-      volumeHours: opt.hours,
-    });
+    // Record full-rate trade signal upon exercise
+    await recordDerivativeTrade(
+      "option_exercise",
+      opt.skillCategoryId,
+      opt.fullRateCents,
+      opt.hours,
+      { buyerId: user.id, sellerId: opt.professionalId, refId: id },
+    );
 
     const detail = await buildOptionDetail(id);
-    res.json(detail);
+    res.json({ ...detail, committedListingId: newListing.id });
   } catch (err) {
     req.log.error({ err }, "exerciseOption error");
     res.status(500).json({ error: "Internal server error" });
@@ -483,15 +512,17 @@ router.post("/options/:id/expire", requireAuth, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Swaps
+// ---------------------------------------------------------------------------
+
 router.get("/swaps", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   try {
     const user = await getDbUser(clerkId);
     if (!user) { res.json([]); return; }
 
-    const rows = await db
-      .select()
-      .from(timeSwaps)
+    const rows = await db.select().from(timeSwaps)
       .where(or(eq(timeSwaps.proposerId, user.id), eq(timeSwaps.counterpartyId, user.id)))
       .orderBy(desc(timeSwaps.createdAt));
 
@@ -506,10 +537,7 @@ router.get("/swaps", requireAuth, async (req, res) => {
 router.post("/swaps", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   const parsed = ProposeSwapBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
   try {
     const user = await getDbUser(clerkId);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
@@ -521,20 +549,17 @@ router.post("/swaps", requireAuth, async (req, res) => {
     if (!proposerListing) { res.status(400).json({ error: "Proposer listing not found" }); return; }
     if (proposerListing.professionalId !== user.id) { res.status(403).json({ error: "You do not own this listing" }); return; }
 
-    const [created] = await db
-      .insert(timeSwaps)
-      .values({
-        proposerId: user.id,
-        counterpartyId: body.counterpartyId,
-        proposerListingId: body.proposerListingId,
-        counterpartyListingId: body.counterpartyListingId ?? null,
-        proposerHours: body.proposerHours,
-        counterpartyHours: body.counterpartyHours,
-        proposerSkillCategoryId: body.proposerSkillCategoryId,
-        counterpartySkillCategoryId: body.counterpartySkillCategoryId,
-        note: body.note ?? null,
-      })
-      .returning();
+    const [created] = await db.insert(timeSwaps).values({
+      proposerId: user.id,
+      counterpartyId: body.counterpartyId,
+      proposerListingId: body.proposerListingId,
+      counterpartyListingId: body.counterpartyListingId ?? null,
+      proposerHours: body.proposerHours,
+      counterpartyHours: body.counterpartyHours,
+      proposerSkillCategoryId: body.proposerSkillCategoryId,
+      counterpartySkillCategoryId: body.counterpartySkillCategoryId,
+      note: body.note ?? null,
+    }).returning();
 
     const detail = await buildSwapDetail(created.id);
     res.status(201).json(detail);
@@ -554,8 +579,7 @@ router.get("/swaps/:id", requireAuth, async (req, res) => {
     const detail = await buildSwapDetail(id);
     if (!detail) { res.status(404).json({ error: "Not found" }); return; }
     if (detail.proposerId !== user.id && detail.counterpartyId !== user.id) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
+      res.status(403).json({ error: "Forbidden" }); return;
     }
     res.json(detail);
   } catch (err) {
@@ -576,7 +600,47 @@ router.post("/swaps/:id/accept", requireAuth, async (req, res) => {
     if (swap.counterpartyId !== user.id) { res.status(403).json({ error: "Only the counterparty can accept a swap" }); return; }
     if (swap.status !== "proposed") { res.status(400).json({ error: "Swap is not in proposed state" }); return; }
 
-    await db.update(timeSwaps).set({ status: "accepted", updatedAt: new Date() }).where(eq(timeSwaps.id, id));
+    // Execute commitment exchange atomically
+    await db.transaction(async (tx) => {
+      // Proposer's listing → counterparty becomes buyer
+      const [proposerListing] = await tx.select().from(timeListings).where(eq(timeListings.id, swap.proposerListingId)).limit(1);
+      if (proposerListing) {
+        const newStatus = proposerListing.status === "open" || proposerListing.status === "in_bidding" ? "committed" : proposerListing.status;
+        await tx.update(timeListings)
+          .set({ buyerId: swap.counterpartyId, status: newStatus, updatedAt: new Date() })
+          .where(eq(timeListings.id, swap.proposerListingId));
+      }
+
+      // Counterparty's listing (if specified) → proposer becomes buyer
+      if (swap.counterpartyListingId) {
+        const [cpListing] = await tx.select().from(timeListings).where(eq(timeListings.id, swap.counterpartyListingId)).limit(1);
+        if (cpListing) {
+          const newStatus = cpListing.status === "open" || cpListing.status === "in_bidding" ? "committed" : cpListing.status;
+          await tx.update(timeListings)
+            .set({ buyerId: swap.proposerId, status: newStatus, updatedAt: new Date() })
+            .where(eq(timeListings.id, swap.counterpartyListingId));
+        }
+      }
+
+      await tx.update(timeSwaps).set({ status: "completed", updatedAt: new Date() }).where(eq(timeSwaps.id, id));
+    });
+
+    // Record derivative trades for both sides of the exchange
+    await recordDerivativeTrade(
+      "swap_completion",
+      swap.proposerSkillCategoryId,
+      0,
+      swap.proposerHours,
+      { buyerId: swap.counterpartyId, sellerId: swap.proposerId, refId: id },
+    );
+    await recordDerivativeTrade(
+      "swap_completion",
+      swap.counterpartySkillCategoryId,
+      0,
+      swap.counterpartyHours,
+      { buyerId: swap.proposerId, sellerId: swap.counterpartyId, refId: id },
+    );
+
     const detail = await buildSwapDetail(id);
     res.json(detail);
   } catch (err) {
@@ -606,6 +670,10 @@ router.post("/swaps/:id/decline", requireAuth, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Bundles
+// ---------------------------------------------------------------------------
+
 router.get("/bundles", async (req, res) => {
   const parsed = ListBundlesQueryParams.safeParse(req.query);
   const { limit = 20, offset = 0 } = parsed.success ? parsed.data : req.query as { limit?: number; offset?: number };
@@ -615,13 +683,7 @@ router.get("/bundles", async (req, res) => {
   try {
     const whereClause = eq(bundles.status, "open");
     const [{ total }] = await db.select({ total: count() }).from(bundles).where(whereClause);
-    const rows = await db
-      .select()
-      .from(bundles)
-      .where(whereClause)
-      .orderBy(desc(bundles.createdAt))
-      .limit(lim)
-      .offset(off);
+    const rows = await db.select().from(bundles).where(whereClause).orderBy(desc(bundles.createdAt)).limit(lim).offset(off);
 
     const items = (await Promise.all(rows.map((r) => buildBundleDetail(r.id)))).filter(Boolean);
     res.json({ items, total, limit: lim, offset: off });
@@ -634,42 +696,62 @@ router.get("/bundles", async (req, res) => {
 router.post("/bundles", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   const parsed = CreateBundleBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
   try {
     const user = await getDbUser(clerkId);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
     const body = parsed.data;
-    if (!body.items || body.items.length === 0) {
-      res.status(400).json({ error: "Bundle must have at least one item" });
-      return;
+    const items = body.items ?? [];
+
+    // Enforce 2–5 professionals across different skill categories
+    if (items.length < 2 || items.length > 5) {
+      res.status(400).json({ error: "Bundle must contain 2–5 listings" }); return;
     }
 
-    const [createdBundle] = await db
-      .insert(bundles)
-      .values({
-        creatorId: user.id,
-        title: body.title,
-        description: body.description ?? null,
-        totalPriceCents: body.totalPriceCents,
-      })
-      .returning();
-
-    const listingIds = body.items.map((i: { listingId: number; hours: number }) => i.listingId);
-    const listingRows = await db
-      .select()
-      .from(timeListings)
-      .where(sql`${timeListings.id} = ANY(${listingIds})`);
+    // Fetch all listings in one query
+    const listingIds = items.map((i) => i.listingId);
+    const listingRows = await db.select().from(timeListings).where(inArray(timeListings.id, listingIds));
     const listingMap = new Map(listingRows.map((l) => [l.id, l]));
 
+    const professionalIds = new Set<number>();
+    const skillCategoryIds = new Set<number>();
+
+    for (const item of items) {
+      const listing = listingMap.get(item.listingId);
+      if (!listing) { res.status(400).json({ error: `Listing ${item.listingId} not found` }); return; }
+
+      // Authorization: creator must be the professional OR the buyer of each listing
+      const isCreatorProfessional = listing.professionalId === user.id;
+      const isCreatorBuyer = listing.buyerId === user.id && listing.status === "committed";
+      if (!isCreatorProfessional && !isCreatorBuyer) {
+        res.status(403).json({ error: `You do not have rights to bundle listing ${item.listingId}` }); return;
+      }
+
+      professionalIds.add(listing.professionalId);
+      skillCategoryIds.add(listing.skillCategoryId);
+    }
+
+    // Validate diversity: different professionals AND different skill categories
+    if (professionalIds.size < 2) {
+      res.status(400).json({ error: "Bundle must include at least 2 different professionals" }); return;
+    }
+    if (skillCategoryIds.size < 2) {
+      res.status(400).json({ error: "Bundle must span at least 2 different skill categories" }); return;
+    }
+
+    const [createdBundle] = await db.insert(bundles).values({
+      creatorId: user.id,
+      title: body.title,
+      description: body.description ?? null,
+      totalPriceCents: body.totalPriceCents,
+    }).returning();
+
     await db.insert(bundleItems).values(
-      body.items.map((item: { listingId: number; hours: number }) => ({
+      items.map((item) => ({
         bundleId: createdBundle.id,
         listingId: item.listingId,
-        professionalId: listingMap.get(item.listingId)?.professionalId ?? user.id,
+        professionalId: listingMap.get(item.listingId)!.professionalId,
         hours: item.hours,
       })),
     );
@@ -706,31 +788,58 @@ router.post("/bundles/:id/purchase", requireAuth, async (req, res) => {
     if (bundle.status !== "open") { res.status(400).json({ error: "Bundle is not available for purchase" }); return; }
     if (bundle.creatorId === user.id) { res.status(400).json({ error: "Cannot purchase your own bundle" }); return; }
 
-    await db.update(bundles).set({ status: "sold", buyerId: user.id, updatedAt: new Date() }).where(eq(bundles.id, id));
-
-    // Atomically transfer ownership of every component listing to the buyer
     const items = await db.select().from(bundleItems).where(eq(bundleItems.bundleId, id));
+    const listingIds = items.map((i) => i.listingId);
+    const listingRows = await db.select().from(timeListings).where(inArray(timeListings.id, listingIds));
+    const listingMap = new Map(listingRows.map((l) => [l.id, l]));
+
+    // Verify at purchase time: bundle creator still holds rights to each listing
+    for (const item of items) {
+      const listing = listingMap.get(item.listingId);
+      if (!listing) { res.status(409).json({ error: `Listing ${item.listingId} no longer exists` }); return; }
+      const isCreatorProfessional = listing.professionalId === bundle.creatorId && (listing.status === "open" || listing.status === "in_bidding");
+      const isCreatorBuyer = listing.buyerId === bundle.creatorId && listing.status === "committed";
+      if (!isCreatorProfessional && !isCreatorBuyer) {
+        res.status(409).json({ error: `Listing ${item.listingId} is no longer available for bundle transfer` }); return;
+      }
+    }
+
     const totalBundleHours = items.reduce((sum, item) => sum + item.hours, 0);
     const perHourRate = totalBundleHours > 0 ? Math.round(bundle.totalPriceCents / totalBundleHours) : 0;
 
-    await Promise.all(
-      items.map(async (item) => {
-        await db
-          .update(timeListings)
-          .set({ buyerId: user.id, updatedAt: new Date() })
-          .where(and(eq(timeListings.id, item.listingId), eq(timeListings.status, "committed")));
+    // Execute all transfers atomically
+    await db.transaction(async (tx) => {
+      await tx.update(bundles).set({ status: "sold", buyerId: user.id, updatedAt: new Date() }).where(eq(bundles.id, id));
 
-        // Record price signal per skill category item
-        const [listing] = await db.select().from(timeListings).where(eq(timeListings.id, item.listingId)).limit(1);
-        if (listing?.skillCategoryId && perHourRate > 0) {
-          await db.insert(priceSnapshots).values({
-            skillCategoryId: listing.skillCategoryId,
-            vwapCents: perHourRate,
-            volumeHours: item.hours,
-          });
+      for (const item of items) {
+        const listing = listingMap.get(item.listingId)!;
+        const isCreatorProfessional = listing.professionalId === bundle.creatorId;
+
+        if (isCreatorProfessional) {
+          // Professional bundles their own open service → becomes committed for new buyer
+          await tx.update(timeListings)
+            .set({ buyerId: user.id, status: "committed", updatedAt: new Date() })
+            .where(and(eq(timeListings.id, item.listingId), eq(timeListings.professionalId, bundle.creatorId)));
+        } else {
+          // Buyer resells their committed contract → transfer buyerId
+          await tx.update(timeListings)
+            .set({ buyerId: user.id, updatedAt: new Date() })
+            .where(and(eq(timeListings.id, item.listingId), eq(timeListings.buyerId, bundle.creatorId), eq(timeListings.status, "committed")));
         }
-      }),
-    );
+      }
+    });
+
+    // Record derivative trades for each item after transaction commits
+    for (const item of items) {
+      const listing = listingMap.get(item.listingId)!;
+      await recordDerivativeTrade(
+        "bundle_purchase",
+        listing.skillCategoryId,
+        perHourRate,
+        item.hours,
+        { buyerId: user.id, sellerId: bundle.creatorId, refId: id },
+      );
+    }
 
     const detail = await buildBundleDetail(id);
     res.json(detail);
@@ -761,6 +870,10 @@ router.delete("/bundles/:id", requireAuth, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Derivatives portfolio (authenticated)
+// ---------------------------------------------------------------------------
+
 router.get("/derivatives/portfolio", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   try {
@@ -771,24 +884,16 @@ router.get("/derivatives/portfolio", requireAuth, async (req, res) => {
     }
 
     const [slRows, optRows, swapRows, bundleRows] = await Promise.all([
-      db
-        .select()
-        .from(secondaryListings)
+      db.select().from(secondaryListings)
         .where(or(eq(secondaryListings.sellerId, user.id), eq(secondaryListings.buyerId, user.id)))
         .orderBy(desc(secondaryListings.listedAt)),
-      db
-        .select()
-        .from(timeOptions)
+      db.select().from(timeOptions)
         .where(or(eq(timeOptions.professionalId, user.id), eq(timeOptions.holderId, user.id)))
         .orderBy(desc(timeOptions.createdAt)),
-      db
-        .select()
-        .from(timeSwaps)
+      db.select().from(timeSwaps)
         .where(or(eq(timeSwaps.proposerId, user.id), eq(timeSwaps.counterpartyId, user.id)))
         .orderBy(desc(timeSwaps.createdAt)),
-      db
-        .select()
-        .from(bundles)
+      db.select().from(bundles)
         .where(or(eq(bundles.creatorId, user.id), eq(bundles.buyerId, user.id)))
         .orderBy(desc(bundles.createdAt)),
     ]);
