@@ -1,144 +1,85 @@
 # Human Time Market
 
-A **time-as-a-commodity** marketplace prototype: professionals list time (fixed rate, auction, emergency), buyers bid and book, and the stack adds an **order book**, **price index** (VWAP, SSE), **secondary market**, **time options**, **swaps**, and **bundles**. Auth and identity are handled by **Clerk**; profiles, listings, and market data live in **PostgreSQL** (Drizzle ORM).
+Clerk-authenticated **marketplace for professional time**: listings (fixed rate, auction, emergency), RFPs, an **order book** with price–time matching, **SSE** streams for live prices and depth, secondary resale, time **options**, **swaps**, **bundles**, and a derivatives portfolio view. Implemented as a pnpm monorepo (`artifacts/human-time-market` + `artifacts/api-server`) with PostgreSQL and Drizzle.
 
-## Stack
+## Tech stack
 
-| Layer | Technology |
-|--------|------------|
-| Monorepo | pnpm workspaces, Node.js 24, TypeScript 5.9 |
-| API | Express 5, `@clerk/express`, pino, `http-proxy-middleware` (Clerk Frontend API proxy in production) |
-| Database | PostgreSQL, Drizzle ORM, `drizzle-kit push`, optional `tsx` seed (`pnpm --filter @workspace/db run seed`) |
-| Contract | OpenAPI 3.1 (`lib/api-spec/openapi.yaml`), Orval → `@workspace/api-client-react`, `@workspace/api-zod` |
-| Frontend | React 19, Vite 7, wouter, Tailwind CSS 4, TanStack Query, Radix UI, Recharts, `@clerk/react` |
-| Email | Resend (optional; stubs to logs if `RESEND_API_KEY` unset) |
+- **Frontend:** React 19, Vite, Wouter, TanStack Query, Tailwind 4, Radix/shadcn-style UI, `@clerk/react`.
+- **API:** Express 5, `@clerk/express`, Pino, Drizzle ORM, Zod (see workspace `replit.md`).
+- **Data:** PostgreSQL (`DATABASE_URL`); schema covers users, profiles, skills, listings, bids, RFPs, orders, trades, price snapshots, escrow placeholder, derivatives tables (see `replit.md`).
 
-## Repository structure
+## Project structure
 
-```
-├── artifacts/
-│   ├── human-time-market/   # Main SPA
-│   ├── api-server/          # Express app, routes under `/api`
-│   └── mockup-sandbox/      # UI sandbox
-├── lib/
-│   ├── db/                  # Schema, seed, migrations push
-│   ├── api-spec/, api-zod/, api-client-react/
-├── replit.md                # Full route list, schema, matching engine notes
-└── package.json             # Root workspace (pnpm only)
-```
-
-## Prerequisites
-
-- Node.js **24** and **pnpm**
-- **PostgreSQL** and a `DATABASE_URL`
-- **Clerk** application (publishable + secret keys for production proxy behavior)
-
-## Environment variables
-
-### API (`artifacts/api-server`)
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PORT` | yes | HTTP listen port (e.g. `8080`) |
-| `DATABASE_URL` | yes* | Postgres URL — required whenever route handlers use the DB (normal operation) |
-| `CLERK_PUBLISHABLE_KEY` | yes | Passed to `clerkMiddleware` / `publishableKeyFromHost` |
-| `CLERK_SECRET_KEY` | prod recommended | Enables `/api/__clerk` → Clerk Frontend API proxy when `NODE_ENV=production` |
-| `CORS_ALLOWED_ORIGINS` | yes for browser SPA | Comma-separated allowed origins (credentials enabled). If `REPLIT_DEV_DOMAIN` is set, `https://<that>` is appended automatically |
-| `NODE_ENV` | no | `production` enables Clerk proxy middleware branch |
-| `LOG_LEVEL` | no | pino level (default `info`) |
-| `REPLIT_DEV_DOMAIN` | no | Appended to CORS allow-list as `https://...` |
-| `EMAIL_FROM` | no | Default `Human Time Market <noreply@htm.local>` |
-| `RESEND_API_KEY` | no | If unset, outbound email is logged only (`src/lib/email.ts`) |
-| `APP_URL` | no | Base URL for links inside email HTML (see `email.ts` for fallbacks with `REPLIT_DEV_DOMAIN`) |
-
-\* `DATABASE_URL` is read from `lib/db` / pool; the API will fail on DB access without it.
-
-### Frontend (`artifacts/human-time-market`)
-
-Vite requires **`PORT`** and **`BASE_PATH`** (same pattern as other Replit Vite artifacts).
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `VITE_CLERK_PUBLISHABLE_KEY` | yes | Thrown at startup if missing (`App.tsx`) |
-| `VITE_CLERK_PROXY_URL` | no | Passed to `<ClerkProvider proxyUrl={...}>` (use when proxying Clerk through the API) |
-| `NODE_ENV`, `REPL_ID` | no | Replit-only Vite plugins when non-production + `REPL_ID` set |
-
-The SPA calls **`/api`** on the **same origin** as the loaded page (cookies / Clerk). Coordinate `BASE_PATH`, hosting, and `CORS_ALLOWED_ORIGINS` so the browser origin matches an allowed entry.
-
-### Database CLI (`lib/db`)
-
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | Required for `pnpm --filter @workspace/db run push` (and `seed`) |
+| Path | Role |
+|------|------|
+| `artifacts/human-time-market/` | SPA (`$PORT`, base `/` in dev per `replit.md`). |
+| `artifacts/api-server/` | REST + SSE under `/api` (API port 8080 in `replit.md` notes). |
+| `lib/db/` | Drizzle schema + seed (`pnpm --filter @workspace/db run push`). |
+| `lib/api-spec/` | OpenAPI + Orval (`pnpm --filter @workspace/api-spec run codegen`). |
+| `lib/api-client-react/`, `lib/api-zod/` | Generated client and validators. |
+| `replit.md` | Authoritative architecture: DB tables, API list, frontend routes, matching engine. |
 
 ## Setup
 
 ```bash
 pnpm install
-pnpm run typecheck
 pnpm --filter @workspace/db run push
-pnpm --filter @workspace/db run seed   # optional: skill taxonomy + seeds
-```
-
-After editing `lib/api-spec/openapi.yaml`:
-
-```bash
 pnpm --filter @workspace/api-spec run codegen
 ```
 
-## Run commands
+Configure Clerk and Postgres before exercising auth routes.
 
-**API:**
+## Environment variables
+
+From `artifacts/api-server` code paths:
+
+| Variable | Description |
+|----------|-------------|
+| `PORT` | API listen port (`src/index.ts`). |
+| `DATABASE_URL` | PostgreSQL connection (`lib/db`). |
+| `NODE_ENV` | `development` / `production`, etc. |
+| `LOG_LEVEL` | Pino level (default `info`). |
+| `CLERK_SECRET_KEY` | Server-side Clerk secret (proxy middleware in production). |
+| `CLERK_PUBLISHABLE_KEY` | Publishable key for `clerkMiddleware` host resolution. |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated browser origins; entries trimmed. |
+| `REPLIT_DEV_DOMAIN` | When set, `https://<domain>` is appended to CORS allowlist. |
+| `RESEND_API_KEY` | Optional transactional email (`lib/email.ts`). |
+| `EMAIL_FROM` | From header override (default `Human Time Market <noreply@htm.local>`). |
+| `APP_URL` | Base URL for links; falls back with `REPLIT_DEV_DOMAIN` in `email.ts`. |
+
+**Frontend:** set `VITE_CLERK_PUBLISHABLE_KEY` and any Vite `PORT` / `BASE_PATH` required by `vite.config.ts`.
+
+## How to run
 
 ```bash
-set PORT=8080
-set DATABASE_URL=postgres://...
-set CLERK_PUBLISHABLE_KEY=pk_...
-set CORS_ALLOWED_ORIGINS=http://localhost:5173
-pnpm --filter @workspace/api-server run build
-pnpm --filter @workspace/api-server run start
-```
-
-(The `dev` script uses Unix `export`; on Windows set env vars explicitly or use Git Bash.)
-
-**Frontend:**
-
-```bash
-set PORT=5173
-set BASE_PATH=/
-set VITE_CLERK_PUBLISHABLE_KEY=pk_...
+pnpm --filter @workspace/api-server run dev
 pnpm --filter @workspace/human-time-market run dev
 ```
 
-**Workspace:**
+Align SPA API base URL with your deployment (same-origin `/api` or proxy).
 
-- `pnpm run typecheck` — all workspace packages that define `typecheck`
-- `pnpm run build` — typecheck then recursive `build`
+## API (summary)
 
-## Features
+All prefixes below are under **`/api`** (see `replit.md` for the canonical list):
 
-- **Profiles & onboarding** — Clerk user synced to `users` / `professional_profiles` / skills (`GET/PUT /api/users/me`, skill endpoints)
-- **Listings & bids** — create listings, book fixed-rate, auction bids, accept bid (`/api/listings`, `/api/listings/:id/bids`, …)
-- **RFPs** — post and respond (`/api/rfps`, …)
-- **Skill taxonomy** — nested categories (`GET /api/skill-categories`)
-- **Order book & matching** — price-time matching, trades, VWAP snapshots (`/api/orders`, `/api/order-book/...`, SSE events)
-- **Price index** — live grid + history (`/api/price-index`, `/api/price-history/...`, SSE)
-- **Derivatives-style products** — secondary listings, options, swaps, bundles (`/api/secondary-market`, `/api/options`, `/api/swaps`, `/api/bundles`, `/api/derivatives/portfolio`)
+- **Users:** `GET /users/me`, `PUT /users/me`, skills on `/users/me/skills`.
+- **Listings:** CRUD, book, bids, accept bid.
+- **RFPs:** list/create, detail, responses.
+- **Market data:** `GET /skill-categories`, `GET /price-index`, `GET /price-history/:skillCategoryId`, `GET /order-book/:skillCategoryId`, SSE `.../events` and `/price-index/events`.
+- **Orders:** `POST /orders`, `DELETE /orders/:orderId`.
+- **Secondary / options / swaps / bundles:** routes under `/secondary-market`, `/options`, `/swaps`, `/bundles` with purchase/exercise/accept/decline where applicable.
+- **Portfolio:** `GET /derivatives/portfolio` (auth).
 
-See **`replit.md`** for the authoritative bullet list of endpoints, tables, frontend routes, and matching rules.
+## Frontend routes (from `replit.md`)
 
-## HTTP API
+`/`, `/marketplace`, `/listings/:listingId`, `/onboarding`, `/price-index`, `/secondary-market`, `/derivatives`, `/dashboard`, `/profile/me`, `/profile/:userId`, `/sign-in`, `/sign-up`.
 
-- **OpenAPI:** `lib/api-spec/openapi.yaml` — base path `/api`, version 0.2.0, tags include health, users, skill-categories, listings, bids, rfps, order-book, and additional domains per spec.
-- **Health:** `GET /api/healthz`
-- **Clerk proxy (production):** `POST/GET …` under `/api/__clerk` when proxy middleware is active (`CLERK_SECRET_KEY` + `NODE_ENV=production`)
+## Features (behavioral)
 
-## Frontend routes (summary)
+- Onboarding gate on marketplace for signed-in users without completed profile.
+- Order book matching: bids vs asks when `bid.rateCents >= ask.rateCents`; trades and VWAP snapshots updated; SSE broadcasts via `sseManager.ts`.
+- Clerk session integration with documented cache-invalidator rules (`replit.md`).
 
-| Area | Paths |
-|------|--------|
-| Auth | `/sign-in`, `/sign-up` |
-| Core | `/`, `/marketplace`, `/onboarding`, `/listings/:listingId`, `/dashboard`, `/profile/me`, `/profile/:userId` |
-| Markets | `/price-index`, `/secondary-market`, `/derivatives` |
+## License
 
-Details and guards (e.g. onboarding redirects) are in **`replit.md`**.
+See root `package.json`.
