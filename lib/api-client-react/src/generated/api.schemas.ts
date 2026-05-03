@@ -159,6 +159,8 @@ export interface ListingSummary {
   endDate: string;
   listingType: ListingType;
   rateCents: number;
+  /** @nullable */
+  marketRateCents?: number | null;
   status: ListingStatus;
   professionalId: number;
   professionalDisplayName: string;
@@ -332,6 +334,87 @@ export interface CreateRfpBody {
 export interface CreateRfpResponseBody {
   proposedRateCents: number;
   message: string;
+}
+
+export type OrderType = (typeof OrderType)[keyof typeof OrderType];
+
+export const OrderType = {
+  bid: "bid",
+  ask: "ask",
+} as const;
+
+export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
+
+export const OrderStatus = {
+  open: "open",
+  partially_filled: "partially_filled",
+  filled: "filled",
+  cancelled: "cancelled",
+  expired: "expired",
+} as const;
+
+export interface Order {
+  id: number;
+  orderType: OrderType;
+  skillCategoryId: number;
+  rateCents: number;
+  quantityHours: number;
+  filledHours: number;
+  status: OrderStatus;
+  /** @nullable */
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlaceOrderBody {
+  orderType: OrderType;
+  skillCategoryId: number;
+  rateCents: number;
+  quantityHours: number;
+  expiresAt?: string;
+}
+
+export interface OrderLevel {
+  rateCents: number;
+  totalHours: number;
+  orderCount: number;
+  cumulativeHours: number;
+}
+
+export interface OrderBookDepth {
+  skillCategoryId: number;
+  bids: OrderLevel[];
+  asks: OrderLevel[];
+  /** @nullable */
+  bestBid?: number | null;
+  /** @nullable */
+  bestAsk?: number | null;
+  /** @nullable */
+  spread?: number | null;
+}
+
+export interface PriceIndexEntry {
+  skillCategoryId: number;
+  skillCategoryName: string;
+  skillCategorySlug: string;
+  /** @nullable */
+  parentId?: number | null;
+  /** @nullable */
+  parentName?: string | null;
+  /** @nullable */
+  vwapCents?: number | null;
+  volumeHours24h: number;
+  /** @nullable */
+  change24hCents?: number | null;
+  /** @nullable */
+  lastTradedAt?: string | null;
+}
+
+export interface PriceHistoryPoint {
+  date: string;
+  vwapCents: number;
+  volumeHours: number;
 }
 
 export type ListListingsParams = {

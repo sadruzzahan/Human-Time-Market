@@ -191,6 +191,7 @@ export const ListListingsResponse = zod.object({
       endDate: zod.coerce.date(),
       listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
       rateCents: zod.number(),
+      marketRateCents: zod.number().nullish(),
       status: zod.enum([
         "open",
         "in_bidding",
@@ -744,3 +745,81 @@ export const RespondToRfpBody = zod.object({
   proposedRateCents: zod.number(),
   message: zod.string(),
 });
+
+/**
+ * @summary Place a bid or ask order in the order book
+ */
+export const PlaceOrderBody = zod.object({
+  orderType: zod.enum(["bid", "ask"]),
+  skillCategoryId: zod.number(),
+  rateCents: zod.number(),
+  quantityHours: zod.number(),
+  expiresAt: zod.string().optional(),
+});
+
+/**
+ * @summary Cancel an open or partially-filled order
+ */
+export const CancelOrderParams = zod.object({
+  orderId: zod.coerce.number(),
+});
+
+/**
+ * @summary Get current order book depth for a skill category
+ */
+export const GetOrderBookParams = zod.object({
+  skillCategoryId: zod.coerce.number(),
+});
+
+export const GetOrderBookResponse = zod.object({
+  skillCategoryId: zod.number(),
+  bids: zod.array(
+    zod.object({
+      rateCents: zod.number(),
+      totalHours: zod.number(),
+      orderCount: zod.number(),
+      cumulativeHours: zod.number(),
+    }),
+  ),
+  asks: zod.array(
+    zod.object({
+      rateCents: zod.number(),
+      totalHours: zod.number(),
+      orderCount: zod.number(),
+      cumulativeHours: zod.number(),
+    }),
+  ),
+  bestBid: zod.number().nullish(),
+  bestAsk: zod.number().nullish(),
+  spread: zod.number().nullish(),
+});
+
+/**
+ * @summary Get current VWAP price index for all skill categories
+ */
+export const GetPriceIndexResponseItem = zod.object({
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  skillCategorySlug: zod.string(),
+  parentId: zod.number().nullish(),
+  parentName: zod.string().nullish(),
+  vwapCents: zod.number().nullish(),
+  volumeHours24h: zod.number(),
+  change24hCents: zod.number().nullish(),
+  lastTradedAt: zod.coerce.date().nullish(),
+});
+export const GetPriceIndexResponse = zod.array(GetPriceIndexResponseItem);
+
+/**
+ * @summary Get last 30 days of daily VWAP for a skill category
+ */
+export const GetPriceHistoryParams = zod.object({
+  skillCategoryId: zod.coerce.number(),
+});
+
+export const GetPriceHistoryResponseItem = zod.object({
+  date: zod.string(),
+  vwapCents: zod.number(),
+  volumeHours: zod.number(),
+});
+export const GetPriceHistoryResponse = zod.array(GetPriceHistoryResponseItem);

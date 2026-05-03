@@ -20,6 +20,8 @@ tags:
     description: Bid management
   - name: rfps
     description: Requests for Professionals
+  - name: order-book
+    description: Order book and price discovery
 paths:
   /healthz:
     get:
@@ -545,6 +547,119 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orders:
+    post:
+      operationId: placeOrder
+      tags: [order-book]
+      summary: Place a bid or ask order in the order book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceOrderBody"
+      responses:
+        "201":
+          description: Order placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{orderId}:
+    delete:
+      operationId: cancelOrder
+      tags: [order-book]
+      summary: Cancel an open or partially-filled order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Cancelled
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /order-book/{skillCategoryId}:
+    get:
+      operationId: getOrderBook
+      tags: [order-book]
+      summary: Get current order book depth for a skill category
+      parameters:
+        - name: skillCategoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order book depth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderBookDepth"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /price-index:
+    get:
+      operationId: getPriceIndex
+      tags: [order-book]
+      summary: Get current VWAP price index for all skill categories
+      responses:
+        "200":
+          description: Price index entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PriceIndexEntry"
+
+  /price-history/{skillCategoryId}:
+    get:
+      operationId: getPriceHistory
+      tags: [order-book]
+      summary: Get last 30 days of daily VWAP for a skill category
+      parameters:
+        - name: skillCategoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Price history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PriceHistoryPoint"
+
 components:
   schemas:
     HealthStatus:
@@ -755,6 +870,8 @@ components:
           $ref: "#/components/schemas/ListingType"
         rateCents:
           type: integer
+        marketRateCents:
+          type: ["integer", "null"]
         status:
           $ref: "#/components/schemas/ListingStatus"
         professionalId:
@@ -1205,3 +1322,150 @@ components:
       required:
         - proposedRateCents
         - message
+
+    OrderType:
+      type: string
+      enum: [bid, ask]
+
+    OrderStatus:
+      type: string
+      enum: [open, partially_filled, filled, cancelled, expired]
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderType:
+          $ref: "#/components/schemas/OrderType"
+        skillCategoryId:
+          type: integer
+        rateCents:
+          type: integer
+        quantityHours:
+          type: integer
+        filledHours:
+          type: integer
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        expiresAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - orderType
+        - skillCategoryId
+        - rateCents
+        - quantityHours
+        - filledHours
+        - status
+        - createdAt
+        - updatedAt
+
+    PlaceOrderBody:
+      type: object
+      properties:
+        orderType:
+          $ref: "#/components/schemas/OrderType"
+        skillCategoryId:
+          type: integer
+        rateCents:
+          type: integer
+        quantityHours:
+          type: integer
+        expiresAt:
+          type: string
+      required:
+        - orderType
+        - skillCategoryId
+        - rateCents
+        - quantityHours
+
+    OrderLevel:
+      type: object
+      properties:
+        rateCents:
+          type: integer
+        totalHours:
+          type: integer
+        orderCount:
+          type: integer
+        cumulativeHours:
+          type: integer
+      required:
+        - rateCents
+        - totalHours
+        - orderCount
+        - cumulativeHours
+
+    OrderBookDepth:
+      type: object
+      properties:
+        skillCategoryId:
+          type: integer
+        bids:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLevel"
+        asks:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLevel"
+        bestBid:
+          type: ["integer", "null"]
+        bestAsk:
+          type: ["integer", "null"]
+        spread:
+          type: ["integer", "null"]
+      required:
+        - skillCategoryId
+        - bids
+        - asks
+
+    PriceIndexEntry:
+      type: object
+      properties:
+        skillCategoryId:
+          type: integer
+        skillCategoryName:
+          type: string
+        skillCategorySlug:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+        parentName:
+          type: ["string", "null"]
+        vwapCents:
+          type: ["integer", "null"]
+        volumeHours24h:
+          type: integer
+        change24hCents:
+          type: ["integer", "null"]
+        lastTradedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - skillCategoryId
+        - skillCategoryName
+        - skillCategorySlug
+        - volumeHours24h
+
+    PriceHistoryPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        vwapCents:
+          type: integer
+        volumeHours:
+          type: integer
+      required:
+        - date
+        - vwapCents
+        - volumeHours

@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db, users, professionalProfiles, skillCategories, timeListings, bids, escrowRecords } from "@workspace/db";
+import { db, users, professionalProfiles, skillCategories, timeListings, bids, escrowRecords, priceSnapshots } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
-import { eq, and, gte, lte, count, desc, SQL, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, count, desc, SQL, inArray, sql } from "drizzle-orm";
 import {
   CreateListingBody,
   UpdateListingBody,
@@ -172,6 +172,33 @@ router.get("/listings", async (req, res) => {
         : [];
     const bidCountMap = Object.fromEntries(bidCounts.map((b) => [b.listingId, b.cnt]));
 
+    // Batch-fetch latest VWAP per skillCategoryId for market rate indicator
+    const uniqueCatIds = [...new Set(rows.map((r) => r.time_listings.skillCategoryId))];
+    const marketRates: Record<number, number | null> = {};
+    if (uniqueCatIds.length > 0) {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const vwapRows = await db
+        .select({
+          skillCategoryId: priceSnapshots.skillCategoryId,
+          vwapCents: sql<number>`
+            cast(
+              sum(cast(${priceSnapshots.vwapCents} as bigint) * cast(${priceSnapshots.volumeHours} as bigint))::float
+              / nullif(sum(${priceSnapshots.volumeHours}), 0)
+            as int)`,
+        })
+        .from(priceSnapshots)
+        .where(
+          and(
+            inArray(priceSnapshots.skillCategoryId, uniqueCatIds),
+            gte(priceSnapshots.snapshotAt, oneDayAgo),
+          ),
+        )
+        .groupBy(priceSnapshots.skillCategoryId);
+      for (const v of vwapRows) {
+        marketRates[v.skillCategoryId] = v.vwapCents != null ? Number(v.vwapCents) : null;
+      }
+    }
+
     const items = rows.map(({ time_listings: l, users: u, professional_profiles: pp }) => {
       const cat = catMap[l.skillCategoryId];
       return {
@@ -185,6 +212,7 @@ router.get("/listings", async (req, res) => {
         endDate: l.endDate,
         listingType: l.listingType,
         rateCents: l.rateCents,
+        marketRateCents: marketRates[l.skillCategoryId] ?? null,
         status: l.status,
         professionalId: l.professionalId,
         professionalDisplayName: u.displayName,

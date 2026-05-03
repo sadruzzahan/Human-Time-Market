@@ -28,7 +28,12 @@ import type {
   ListRfpsParams,
   ListingDetail,
   ListingsPage,
+  Order,
+  OrderBookDepth,
   PlaceBidBody,
+  PlaceOrderBody,
+  PriceHistoryPoint,
+  PriceIndexEntry,
   PublicProfile,
   RfpDetail,
   RfpResponseDetail,
@@ -1892,3 +1897,427 @@ export const useRespondToRfp = <
 > => {
   return useMutation(getRespondToRfpMutationOptions(options));
 };
+
+/**
+ * @summary Place a bid or ask order in the order book
+ */
+export const getPlaceOrderUrl = () => {
+  return `/api/orders`;
+};
+
+export const placeOrder = async (
+  placeOrderBody: PlaceOrderBody,
+  options?: RequestInit,
+): Promise<Order> => {
+  return customFetch<Order>(getPlaceOrderUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(placeOrderBody),
+  });
+};
+
+export const getPlaceOrderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof placeOrder>>,
+    TError,
+    { data: BodyType<PlaceOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof placeOrder>>,
+  TError,
+  { data: BodyType<PlaceOrderBody> },
+  TContext
+> => {
+  const mutationKey = ["placeOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof placeOrder>>,
+    { data: BodyType<PlaceOrderBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return placeOrder(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PlaceOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof placeOrder>>
+>;
+export type PlaceOrderMutationBody = BodyType<PlaceOrderBody>;
+export type PlaceOrderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Place a bid or ask order in the order book
+ */
+export const usePlaceOrder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof placeOrder>>,
+    TError,
+    { data: BodyType<PlaceOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof placeOrder>>,
+  TError,
+  { data: BodyType<PlaceOrderBody> },
+  TContext
+> => {
+  return useMutation(getPlaceOrderMutationOptions(options));
+};
+
+/**
+ * @summary Cancel an open or partially-filled order
+ */
+export const getCancelOrderUrl = (orderId: number) => {
+  return `/api/orders/${orderId}`;
+};
+
+export const cancelOrder = async (
+  orderId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getCancelOrderUrl(orderId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getCancelOrderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelOrder>>,
+    TError,
+    { orderId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelOrder>>,
+  TError,
+  { orderId: number },
+  TContext
+> => {
+  const mutationKey = ["cancelOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelOrder>>,
+    { orderId: number }
+  > = (props) => {
+    const { orderId } = props ?? {};
+
+    return cancelOrder(orderId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelOrder>>
+>;
+
+export type CancelOrderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Cancel an open or partially-filled order
+ */
+export const useCancelOrder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelOrder>>,
+    TError,
+    { orderId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelOrder>>,
+  TError,
+  { orderId: number },
+  TContext
+> => {
+  return useMutation(getCancelOrderMutationOptions(options));
+};
+
+/**
+ * @summary Get current order book depth for a skill category
+ */
+export const getGetOrderBookUrl = (skillCategoryId: number) => {
+  return `/api/order-book/${skillCategoryId}`;
+};
+
+export const getOrderBook = async (
+  skillCategoryId: number,
+  options?: RequestInit,
+): Promise<OrderBookDepth> => {
+  return customFetch<OrderBookDepth>(getGetOrderBookUrl(skillCategoryId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOrderBookQueryKey = (skillCategoryId: number) => {
+  return [`/api/order-book/${skillCategoryId}`] as const;
+};
+
+export const getGetOrderBookQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOrderBook>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  skillCategoryId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOrderBook>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetOrderBookQueryKey(skillCategoryId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getOrderBook>>> = ({
+    signal,
+  }) => getOrderBook(skillCategoryId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!skillCategoryId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOrderBook>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOrderBookQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOrderBook>>
+>;
+export type GetOrderBookQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get current order book depth for a skill category
+ */
+
+export function useGetOrderBook<
+  TData = Awaited<ReturnType<typeof getOrderBook>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  skillCategoryId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOrderBook>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOrderBookQueryOptions(skillCategoryId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get current VWAP price index for all skill categories
+ */
+export const getGetPriceIndexUrl = () => {
+  return `/api/price-index`;
+};
+
+export const getPriceIndex = async (
+  options?: RequestInit,
+): Promise<PriceIndexEntry[]> => {
+  return customFetch<PriceIndexEntry[]>(getGetPriceIndexUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPriceIndexQueryKey = () => {
+  return [`/api/price-index`] as const;
+};
+
+export const getGetPriceIndexQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPriceIndex>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPriceIndex>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPriceIndexQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPriceIndex>>> = ({
+    signal,
+  }) => getPriceIndex({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPriceIndex>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPriceIndexQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPriceIndex>>
+>;
+export type GetPriceIndexQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get current VWAP price index for all skill categories
+ */
+
+export function useGetPriceIndex<
+  TData = Awaited<ReturnType<typeof getPriceIndex>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPriceIndex>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPriceIndexQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get last 30 days of daily VWAP for a skill category
+ */
+export const getGetPriceHistoryUrl = (skillCategoryId: number) => {
+  return `/api/price-history/${skillCategoryId}`;
+};
+
+export const getPriceHistory = async (
+  skillCategoryId: number,
+  options?: RequestInit,
+): Promise<PriceHistoryPoint[]> => {
+  return customFetch<PriceHistoryPoint[]>(
+    getGetPriceHistoryUrl(skillCategoryId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPriceHistoryQueryKey = (skillCategoryId: number) => {
+  return [`/api/price-history/${skillCategoryId}`] as const;
+};
+
+export const getGetPriceHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPriceHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  skillCategoryId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPriceHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPriceHistoryQueryKey(skillCategoryId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPriceHistory>>> = ({
+    signal,
+  }) => getPriceHistory(skillCategoryId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!skillCategoryId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPriceHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPriceHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPriceHistory>>
+>;
+export type GetPriceHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get last 30 days of daily VWAP for a skill category
+ */
+
+export function useGetPriceHistory<
+  TData = Awaited<ReturnType<typeof getPriceHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  skillCategoryId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPriceHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPriceHistoryQueryOptions(skillCategoryId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

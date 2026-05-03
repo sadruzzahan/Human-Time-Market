@@ -44,6 +44,48 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   cancelled: { label: "CANCELLED", color: "text-destructive border-destructive/40 bg-destructive/10" },
 };
 
+function MarketRateBadge({
+  rateCents,
+  marketRateCents,
+}: {
+  rateCents: number;
+  marketRateCents: number | null | undefined;
+}) {
+  if (!marketRateCents) return null;
+  const ratio = rateCents / marketRateCents;
+  if (ratio > 1.1) {
+    return (
+      <span
+        className="inline-flex items-center text-[9px] font-mono font-semibold px-1 py-0.5 rounded-sm border text-orange-400 border-orange-400/40 bg-orange-400/10"
+        title={`Market rate: $${(marketRateCents / 100).toFixed(0)}/hr`}
+        data-testid="badge-above-market"
+      >
+        ↑ above mkt
+      </span>
+    );
+  }
+  if (ratio < 0.9) {
+    return (
+      <span
+        className="inline-flex items-center text-[9px] font-mono font-semibold px-1 py-0.5 rounded-sm border text-emerald-400 border-emerald-400/40 bg-emerald-400/10"
+        title={`Market rate: $${(marketRateCents / 100).toFixed(0)}/hr`}
+        data-testid="badge-below-market"
+      >
+        ↓ below mkt
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center text-[9px] font-mono font-semibold px-1 py-0.5 rounded-sm border text-muted-foreground border-border bg-muted/50"
+      title={`Market rate: $${(marketRateCents / 100).toFixed(0)}/hr`}
+      data-testid="badge-at-market"
+    >
+      ≈ at mkt
+    </span>
+  );
+}
+
 function ListingCard({ listing }: { listing: ListingSummary }) {
   const typeInfo = LISTING_TYPE_LABELS[listing.listingType] ?? LISTING_TYPE_LABELS.fixed_rate;
   const statusInfo = STATUS_LABELS[listing.status] ?? STATUS_LABELS.open;
@@ -61,6 +103,10 @@ function ListingCard({ listing }: { listing: ListingSummary }) {
             <span className={`inline-flex items-center text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-sm border ${statusInfo.color}`}>
               {statusInfo.label}
             </span>
+            <MarketRateBadge
+              rateCents={listing.rateCents}
+              marketRateCents={listing.marketRateCents}
+            />
           </div>
           <span className="text-lg font-mono font-bold text-primary whitespace-nowrap">{rateDisplay}</span>
         </div>
@@ -90,6 +136,11 @@ function ListingCard({ listing }: { listing: ListingSummary }) {
               <span className="text-yellow-400">{listing.bidCount ?? 0} bid{(listing.bidCount ?? 0) !== 1 ? "s" : ""}</span>
             )}
           </div>
+          {listing.marketRateCents != null && (
+            <div className="flex items-center justify-end text-[10px] font-mono text-muted-foreground/70">
+              mkt ${(listing.marketRateCents / 100).toFixed(0)}/hr
+            </div>
+          )}
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary scale-x-0 group-hover:scale-x-100 transition-transform origin-left rounded-b-sm" />
