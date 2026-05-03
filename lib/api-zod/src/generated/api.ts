@@ -779,12 +779,28 @@ export const RespondToRfpBody = zod.object({
 /**
  * @summary Place a bid or ask order in the order book
  */
+
 export const PlaceOrderBody = zod.object({
   orderType: zod.enum(["bid", "ask"]),
-  skillCategoryId: zod.number(),
-  rateCents: zod.number(),
-  quantityHours: zod.number(),
-  expiresAt: zod.string().optional(),
+  skillCategoryId: zod.number().min(1),
+  rateCents: zod
+    .number()
+    .min(1)
+    .describe(
+      "Rate in cents per hour (e.g., 15000 = $150\/hr). Must be a positive integer.",
+    ),
+  quantityHours: zod
+    .number()
+    .min(1)
+    .describe(
+      "Quantity in whole hours (e.g., 10 = 10 hours). Must be a positive integer.",
+    ),
+  expiresAt: zod.coerce
+    .date()
+    .optional()
+    .describe(
+      "Optional expiry timestamp; order auto-cancels after this time if unfilled",
+    ),
 });
 
 /**
@@ -839,6 +855,15 @@ export const GetPriceIndexResponseItem = zod.object({
   lastTradedAt: zod.coerce.date().nullish(),
 });
 export const GetPriceIndexResponse = zod.array(GetPriceIndexResponseItem);
+
+/**
+ * Returns a text/event-stream (SSE) connection. Emits `order-book` events whenever the order book for this skill category changes (new order, cancel, or fill). Each event data payload is a JSON-serialized OrderBookDepth object. Keep-alive pings are sent every 30 s.
+
+ * @summary Server-Sent Events stream for real-time order book updates
+ */
+export const GetOrderBookEventsParams = zod.object({
+  skillCategoryId: zod.coerce.number(),
+});
 
 /**
  * @summary Get last 30 days of daily VWAP for a skill category

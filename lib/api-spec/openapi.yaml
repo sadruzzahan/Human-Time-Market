@@ -639,6 +639,48 @@ paths:
                 items:
                   $ref: "#/components/schemas/PriceIndexEntry"
 
+  /order-book/{skillCategoryId}/events:
+    get:
+      operationId: getOrderBookEvents
+      tags: [order-book]
+      summary: Server-Sent Events stream for real-time order book updates
+      description: >
+        Returns a text/event-stream (SSE) connection. Emits `order-book` events
+        whenever the order book for this skill category changes (new order, cancel, or fill).
+        Each event data payload is a JSON-serialized OrderBookDepth object.
+        Keep-alive pings are sent every 30 s.
+      parameters:
+        - name: skillCategoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: SSE stream (text/event-stream)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /price-index/events:
+    get:
+      operationId: getPriceIndexEvents
+      tags: [order-book]
+      summary: Server-Sent Events stream for real-time price index updates
+      description: >
+        Returns a text/event-stream (SSE) connection. Emits `price-index` events
+        whenever any skill category's VWAP or volume changes (i.e., after a trade is matched).
+        Each event data payload is a JSON array of PriceIndexEntry objects.
+        Keep-alive pings are sent every 30 s.
+      responses:
+        "200":
+          description: SSE stream (text/event-stream)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
   /price-history/{skillCategoryId}:
     get:
       operationId: getPriceHistory
@@ -1379,12 +1421,19 @@ components:
           $ref: "#/components/schemas/OrderType"
         skillCategoryId:
           type: integer
+          minimum: 1
         rateCents:
           type: integer
+          minimum: 1
+          description: Rate in cents per hour (e.g., 15000 = $150/hr). Must be a positive integer.
         quantityHours:
           type: integer
+          minimum: 1
+          description: Quantity in whole hours (e.g., 10 = 10 hours). Must be a positive integer.
         expiresAt:
           type: string
+          format: date-time
+          description: Optional expiry timestamp; order auto-cancels after this time if unfilled
       required:
         - orderType
         - skillCategoryId

@@ -80,6 +80,10 @@ async function runMatchingEngine(
     const matched = Math.min(remaining, oppRemaining);
     const matchedRate = opp.rateCents; // resting order sets the price (price-time priority)
 
+    // Each trade record IS the committed contract: it canonically records
+    // the buyer (bid order owner), seller (ask order owner), matched rate,
+    // and quantity.  Downstream settlement / escrow creation should subscribe
+    // to the trades table rather than creating a separate contract artifact.
     await tx.insert(trades).values({
       bidOrderId: orderType === "bid" ? orderId : opp.id,
       askOrderId: orderType === "ask" ? orderId : opp.id,
@@ -209,6 +213,19 @@ router.post("/orders", requireAuth, async (req, res) => {
     }
     const { orderType, skillCategoryId, rateCents, quantityHours, expiresAt } =
       parsed.data;
+
+    // Enforce positive-integer market integrity constraints (belt-and-suspenders
+    // over the OpenAPI minimum:1 constraint, which is not enforced by generated Zod).
+    if (
+      !Number.isInteger(rateCents) || rateCents < 1 ||
+      !Number.isInteger(quantityHours) || quantityHours < 1 ||
+      !Number.isInteger(skillCategoryId) || skillCategoryId < 1
+    ) {
+      res.status(400).json({
+        error: "rateCents, quantityHours and skillCategoryId must be positive integers",
+      });
+      return;
+    }
 
     const clerkUserId = req.clerkUserId!;
     const [user] = await db

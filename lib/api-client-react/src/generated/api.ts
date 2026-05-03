@@ -2232,6 +2232,177 @@ export function useGetPriceIndex<
 }
 
 /**
+ * Returns a text/event-stream (SSE) connection. Emits `order-book` events whenever the order book for this skill category changes (new order, cancel, or fill). Each event data payload is a JSON-serialized OrderBookDepth object. Keep-alive pings are sent every 30 s.
+
+ * @summary Server-Sent Events stream for real-time order book updates
+ */
+export const getGetOrderBookEventsUrl = (skillCategoryId: number) => {
+  return `/api/order-book/${skillCategoryId}/events`;
+};
+
+export const getOrderBookEvents = async (
+  skillCategoryId: number,
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getGetOrderBookEventsUrl(skillCategoryId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOrderBookEventsQueryKey = (skillCategoryId: number) => {
+  return [`/api/order-book/${skillCategoryId}/events`] as const;
+};
+
+export const getGetOrderBookEventsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOrderBookEvents>>,
+  TError = ErrorType<unknown>,
+>(
+  skillCategoryId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOrderBookEvents>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetOrderBookEventsQueryKey(skillCategoryId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getOrderBookEvents>>
+  > = ({ signal }) =>
+    getOrderBookEvents(skillCategoryId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!skillCategoryId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOrderBookEvents>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOrderBookEventsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOrderBookEvents>>
+>;
+export type GetOrderBookEventsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Server-Sent Events stream for real-time order book updates
+ */
+
+export function useGetOrderBookEvents<
+  TData = Awaited<ReturnType<typeof getOrderBookEvents>>,
+  TError = ErrorType<unknown>,
+>(
+  skillCategoryId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOrderBookEvents>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOrderBookEventsQueryOptions(
+    skillCategoryId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns a text/event-stream (SSE) connection. Emits `price-index` events whenever any skill category's VWAP or volume changes (i.e., after a trade is matched). Each event data payload is a JSON array of PriceIndexEntry objects. Keep-alive pings are sent every 30 s.
+
+ * @summary Server-Sent Events stream for real-time price index updates
+ */
+export const getGetPriceIndexEventsUrl = () => {
+  return `/api/price-index/events`;
+};
+
+export const getPriceIndexEvents = async (
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getGetPriceIndexEventsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPriceIndexEventsQueryKey = () => {
+  return [`/api/price-index/events`] as const;
+};
+
+export const getGetPriceIndexEventsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPriceIndexEvents>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPriceIndexEvents>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPriceIndexEventsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPriceIndexEvents>>
+  > = ({ signal }) => getPriceIndexEvents({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPriceIndexEvents>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPriceIndexEventsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPriceIndexEvents>>
+>;
+export type GetPriceIndexEventsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Server-Sent Events stream for real-time price index updates
+ */
+
+export function useGetPriceIndexEvents<
+  TData = Awaited<ReturnType<typeof getPriceIndexEvents>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPriceIndexEvents>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPriceIndexEventsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get last 30 days of daily VWAP for a skill category
  */
 export const getGetPriceHistoryUrl = (skillCategoryId: number) => {

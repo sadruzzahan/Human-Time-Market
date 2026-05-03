@@ -374,9 +374,19 @@ export interface Order {
 
 export interface PlaceOrderBody {
   orderType: OrderType;
+  /** @minimum 1 */
   skillCategoryId: number;
+  /**
+   * Rate in cents per hour (e.g., 15000 = $150/hr). Must be a positive integer.
+   * @minimum 1
+   */
   rateCents: number;
+  /**
+   * Quantity in whole hours (e.g., 10 = 10 hours). Must be a positive integer.
+   * @minimum 1
+   */
   quantityHours: number;
+  /** Optional expiry timestamp; order auto-cancels after this time if unfilled */
   expiresAt?: string;
 }
 
