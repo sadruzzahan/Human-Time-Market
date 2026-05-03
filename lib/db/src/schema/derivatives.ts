@@ -154,6 +154,7 @@ export const bundleItems = pgTable(
 
 export const derivativeTradeTypeEnum = [
   "secondary_purchase",
+  "option_purchase",
   "option_exercise",
   "swap_completion",
   "bundle_purchase",

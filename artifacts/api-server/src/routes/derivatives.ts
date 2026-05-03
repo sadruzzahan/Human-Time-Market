@@ -14,6 +14,7 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { eq, and, or, desc, count, sql, inArray } from "drizzle-orm";
+import * as sse from "../lib/sseManager";
 import {
   CreateSecondaryListingBody,
   CreateOptionBody,
@@ -52,8 +53,19 @@ async function recordDerivativeTrade(
     sellerId: opts.sellerId ?? null,
     refId: opts.refId ?? null,
   });
-  // Also record price snapshot for market indexing
+  // Record price snapshot for market indexing
   await db.insert(priceSnapshots).values({ skillCategoryId, vwapCents: rateCents, volumeHours });
+  // Broadcast real-time price-index update to SSE subscribers (same as order-book trades)
+  if (rateCents > 0) {
+    sse.broadcastCategory(skillCategoryId, "price-update", { tradeType, skillCategoryId, rateCents, volumeHours });
+    sse.broadcastGlobal("price-index", { source: "derivative", tradeType, skillCategoryId, rateCents, volumeHours });
+  }
+}
+
+/** Distinguishes expected transactional race/conflict errors from true server errors */
+class ConflictError extends Error {
+  readonly statusCode = 409;
+  constructor(message: string) { super(message); this.name = "ConflictError"; }
 }
 
 // ---------------------------------------------------------------------------
@@ -229,6 +241,7 @@ router.get("/secondary-market", async (req, res) => {
     const items = (await Promise.all(rows.map((r) => buildSecondaryListingDetail(r.id)))).filter(Boolean);
     res.json({ items, total, limit: lim, offset: off });
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "listSecondaryListings error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -259,6 +272,7 @@ router.post("/secondary-market", requireAuth, async (req, res) => {
     const detail = await buildSecondaryListingDetail(created.id);
     res.status(201).json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "createSecondaryListing error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -271,6 +285,7 @@ router.get("/secondary-market/:id", async (req, res) => {
     if (!detail) { res.status(404).json({ error: "Not found" }); return; }
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "getSecondaryListing error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -306,7 +321,7 @@ router.post("/secondary-market/:id/purchase", requireAuth, async (req, res) => {
         ))
         .returning({ id: timeListings.id });
       if (!transferred) {
-        throw new Error("Seller no longer holds this commitment — it may have been transferred or cancelled");
+        throw new ConflictError("Seller no longer holds this commitment — it may have been transferred or cancelled");
       }
 
       // Invalidate any other open secondary listings for the same underlying contract (dedup safety)
@@ -333,6 +348,7 @@ router.post("/secondary-market/:id/purchase", requireAuth, async (req, res) => {
     const detail = await buildSecondaryListingDetail(id);
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "purchaseSecondaryListing error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -354,6 +370,7 @@ router.delete("/secondary-market/:id", requireAuth, async (req, res) => {
     const detail = await buildSecondaryListingDetail(id);
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "cancelSecondaryListing error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -381,6 +398,7 @@ router.get("/options", async (req, res) => {
     const items = (await Promise.all(rows.map((r) => buildOptionDetail(r.id)))).filter(Boolean);
     res.json({ items, total, limit: lim, offset: off });
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "listOptions error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -411,6 +429,7 @@ router.post("/options", requireAuth, async (req, res) => {
     const detail = await buildOptionDetail(created.id);
     res.status(201).json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "createOption error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -423,6 +442,7 @@ router.get("/options/:id", async (req, res) => {
     if (!detail) { res.status(404).json({ error: "Not found" }); return; }
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "getOption error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -450,9 +470,9 @@ router.post("/options/:id/purchase", requireAuth, async (req, res) => {
       res.status(409).json({ error: "Option was purchased concurrently — please refresh" }); return;
     }
 
-    // Record premium payment as a trade signal (option_exercise covers premium + full exercise signals)
+    // Record premium payment as a trade signal (distinct from option_exercise which fires at exercise time)
     await recordDerivativeTrade(
-      "option_exercise",
+      "option_purchase",
       opt.skillCategoryId,
       opt.premiumCents,
       opt.hours,
@@ -462,6 +482,7 @@ router.post("/options/:id/purchase", requireAuth, async (req, res) => {
     const detail = await buildOptionDetail(id);
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "purchaseOption error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -515,7 +536,7 @@ router.post("/options/:id/exercise", requireAuth, async (req, res) => {
           eq(timeOptions.holderId, user.id),
         ))
         .returning({ id: timeOptions.id });
-      if (!exercised) throw new Error("Option was concurrently modified — exercise aborted");
+      if (!exercised) throw new ConflictError("Option was concurrently modified — exercise aborted");
 
       committedListingId = newListing.id;
     });
@@ -532,6 +553,7 @@ router.post("/options/:id/exercise", requireAuth, async (req, res) => {
     const detail = await buildOptionDetail(id);
     res.json({ ...detail, committedListingId: committedListingId! });
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "exerciseOption error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -591,6 +613,7 @@ router.post("/options/:id/expire", requireAuth, async (req, res) => {
     const detail = await buildOptionDetail(id);
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "expireOption error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -613,6 +636,7 @@ router.get("/swaps", requireAuth, async (req, res) => {
     const items = (await Promise.all(rows.map((r) => buildSwapDetail(r.id)))).filter(Boolean);
     res.json(items);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "listSwaps error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -651,6 +675,7 @@ router.post("/swaps", requireAuth, async (req, res) => {
     const detail = await buildSwapDetail(created.id);
     res.status(201).json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "proposeSwap error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -670,6 +695,7 @@ router.get("/swaps/:id", requireAuth, async (req, res) => {
     }
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "getSwap error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -726,7 +752,7 @@ router.post("/swaps/:id/accept", requireAuth, async (req, res) => {
           or(eq(timeListings.status, "open"), eq(timeListings.status, "in_bidding")),
         ))
         .returning({ id: timeListings.id });
-      if (!proposerRow) throw new Error("Proposer listing was concurrently modified — swap cannot complete");
+      if (!proposerRow) throw new ConflictError("Proposer listing was concurrently modified — swap cannot complete");
 
       // Transfer counterparty's listing to proposer — verify affected row (atomic race guard)
       const [cpRow] = await tx
@@ -738,7 +764,7 @@ router.post("/swaps/:id/accept", requireAuth, async (req, res) => {
           or(eq(timeListings.status, "open"), eq(timeListings.status, "in_bidding")),
         ))
         .returning({ id: timeListings.id });
-      if (!cpRow) throw new Error("Counterparty listing was concurrently modified — swap cannot complete");
+      if (!cpRow) throw new ConflictError("Counterparty listing was concurrently modified — swap cannot complete");
 
       // Cancel any open secondary listings for both transferred listings (cross-instrument exclusivity)
       await tx
@@ -774,6 +800,7 @@ router.post("/swaps/:id/accept", requireAuth, async (req, res) => {
     const detail = await buildSwapDetail(id);
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "acceptSwap error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -795,6 +822,7 @@ router.post("/swaps/:id/decline", requireAuth, async (req, res) => {
     const detail = await buildSwapDetail(id);
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "declineSwap error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -818,6 +846,7 @@ router.get("/bundles", async (req, res) => {
     const items = (await Promise.all(rows.map((r) => buildBundleDetail(r.id)))).filter(Boolean);
     res.json({ items, total, limit: lim, offset: off });
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "listBundles error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -889,6 +918,7 @@ router.post("/bundles", requireAuth, async (req, res) => {
     const detail = await buildBundleDetail(createdBundle.id);
     res.status(201).json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "createBundle error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -901,6 +931,7 @@ router.get("/bundles/:id", async (req, res) => {
     if (!detail) { res.status(404).json({ error: "Not found" }); return; }
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "getBundle error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -955,7 +986,7 @@ router.post("/bundles/:id/purchase", requireAuth, async (req, res) => {
               or(eq(timeListings.status, "open"), eq(timeListings.status, "in_bidding")),
             ))
             .returning({ id: timeListings.id });
-          if (!row) throw new Error(`Listing ${item.listingId} is no longer available — concurrent ownership change detected`);
+          if (!row) throw new ConflictError(`Listing ${item.listingId} is no longer available — concurrent ownership change detected`);
         } else {
           // Buyer resells their committed contract → transfer buyerId
           const [row] = await tx.update(timeListings)
@@ -966,7 +997,7 @@ router.post("/bundles/:id/purchase", requireAuth, async (req, res) => {
               eq(timeListings.status, "committed"),
             ))
             .returning({ id: timeListings.id });
-          if (!row) throw new Error(`Listing ${item.listingId} is no longer owned by seller — concurrent transfer detected`);
+          if (!row) throw new ConflictError(`Listing ${item.listingId} is no longer owned by seller — concurrent transfer detected`);
         }
 
         // Cancel any open secondary listings for this listing — ownership is changing
@@ -995,6 +1026,7 @@ router.post("/bundles/:id/purchase", requireAuth, async (req, res) => {
     const detail = await buildBundleDetail(id);
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "purchaseBundle error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -1016,6 +1048,7 @@ router.delete("/bundles/:id", requireAuth, async (req, res) => {
     const detail = await buildBundleDetail(id);
     res.json(detail);
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "cancelBundle error");
     res.status(500).json({ error: "Internal server error" });
   }
@@ -1063,6 +1096,7 @@ router.get("/derivatives/portfolio", requireAuth, async (req, res) => {
       bundles: bundleDetails.filter(Boolean),
     });
   } catch (err) {
+    if (err instanceof ConflictError) { res.status(err.statusCode).json({ error: (err as Error).message }); return; }
     req.log.error({ err }, "getDerivativesPortfolio error");
     res.status(500).json({ error: "Internal server error" });
   }
