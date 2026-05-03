@@ -1177,6 +1177,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /options/{id}/expire:
+    post:
+      operationId: expireOption
+      tags: [derivatives]
+      summary: Explicitly mark an option as expired (let it expire without exercising)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Option expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeOptionDetail"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /swaps:
     get:
       operationId: listSwaps
@@ -2759,6 +2790,7 @@ components:
         premiumCents:
           type: integer
           minimum: 1
+          description: "Option premium in cents. If omitted, auto-computed as 10% of (fullRateCents × hours)."
         fullRateCents:
           type: integer
           minimum: 1
@@ -2770,7 +2802,6 @@ components:
         - hours
         - windowStart
         - windowEnd
-        - premiumCents
         - fullRateCents
 
     TimeSwapDetail:

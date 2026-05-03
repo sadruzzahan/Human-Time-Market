@@ -4209,6 +4209,90 @@ export const useExerciseOption = <
 };
 
 /**
+ * @summary Explicitly mark an option as expired (let it expire without exercising)
+ */
+export const getExpireOptionUrl = (id: number) => {
+  return `/api/options/${id}/expire`;
+};
+
+export const expireOption = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TimeOptionDetail> => {
+  return customFetch<TimeOptionDetail>(getExpireOptionUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getExpireOptionMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof expireOption>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof expireOption>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["expireOption"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof expireOption>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return expireOption(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExpireOptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof expireOption>>
+>;
+
+export type ExpireOptionMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Explicitly mark an option as expired (let it expire without exercising)
+ */
+export const useExpireOption = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof expireOption>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof expireOption>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getExpireOptionMutationOptions(options));
+};
+
+/**
  * @summary Get the current user's time swaps
  */
 export const getListSwapsUrl = () => {

@@ -695,8 +695,11 @@ export interface CreateOptionBody {
   hours: number;
   windowStart: string;
   windowEnd: string;
-  /** @minimum 1 */
-  premiumCents: number;
+  /**
+   * Option premium in cents. If omitted, auto-computed as 10% of (fullRateCents × hours).
+   * @minimum 1
+   */
+  premiumCents?: number;
   /** @minimum 1 */
   fullRateCents: number;
   /** @nullable */

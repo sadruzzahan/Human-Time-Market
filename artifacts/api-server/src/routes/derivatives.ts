@@ -9,6 +9,7 @@ import {
   timeSwaps,
   bundles,
   bundleItems,
+  priceSnapshots,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { eq, and, or, desc, count, sql } from "drizzle-orm";
@@ -282,6 +283,16 @@ router.post("/secondary-market/:id/purchase", requireAuth, async (req, res) => {
       .set({ buyerId: user.id, updatedAt: new Date() })
       .where(eq(timeListings.id, sl.originalListingId));
 
+    // Record price signal for the skill category
+    const [origListing] = await db.select().from(timeListings).where(eq(timeListings.id, sl.originalListingId)).limit(1);
+    if (origListing?.skillCategoryId && origListing.rateCents && origListing.hoursPerWeek) {
+      await db.insert(priceSnapshots).values({
+        skillCategoryId: origListing.skillCategoryId,
+        vwapCents: origListing.rateCents,
+        volumeHours: origListing.hoursPerWeek,
+      });
+    }
+
     const detail = await buildSecondaryListingDetail(id);
     res.json(detail);
   } catch (err) {
@@ -353,6 +364,8 @@ router.post("/options", requireAuth, async (req, res) => {
 
     const body = parsed.data;
     const toDateStr = (d: Date) => d.toISOString().split("T")[0];
+    // Auto-compute premium as 10% of (fullRateCents × hours) if not supplied
+    const premiumCents = body.premiumCents ?? Math.ceil(body.fullRateCents * body.hours * 0.10);
     const [created] = await db
       .insert(timeOptions)
       .values({
@@ -361,7 +374,7 @@ router.post("/options", requireAuth, async (req, res) => {
         hours: body.hours,
         windowStart: toDateStr(body.windowStart),
         windowEnd: toDateStr(body.windowEnd),
-        premiumCents: body.premiumCents,
+        premiumCents,
         fullRateCents: body.fullRateCents,
         expiresAt: body.expiresAt ?? undefined,
       })
@@ -429,10 +442,43 @@ router.post("/options/:id/exercise", requireAuth, async (req, res) => {
       .update(timeOptions)
       .set({ status: "exercised", exercisedAt: new Date(), updatedAt: new Date() })
       .where(eq(timeOptions.id, id));
+
+    // Record price signal: option exercise confirms the full rate for this skill
+    await db.insert(priceSnapshots).values({
+      skillCategoryId: opt.skillCategoryId,
+      vwapCents: opt.fullRateCents,
+      volumeHours: opt.hours,
+    });
+
     const detail = await buildOptionDetail(id);
     res.json(detail);
   } catch (err) {
     req.log.error({ err }, "exerciseOption error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/options/:id/expire", requireAuth, async (req, res) => {
+  const clerkId = req.clerkUserId!;
+  const id = Number(req.params.id);
+  try {
+    const user = await getDbUser(clerkId);
+    if (!user) { res.status(403).json({ error: "Forbidden" }); return; }
+
+    const [opt] = await db.select().from(timeOptions).where(eq(timeOptions.id, id)).limit(1);
+    if (!opt) { res.status(404).json({ error: "Not found" }); return; }
+    if (opt.professionalId !== user.id && opt.holderId !== user.id) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
+    if (opt.status === "exercised" || opt.status === "expired") {
+      res.status(400).json({ error: "Option is already finalized" }); return;
+    }
+
+    await db.update(timeOptions).set({ status: "expired", updatedAt: new Date() }).where(eq(timeOptions.id, id));
+    const detail = await buildOptionDetail(id);
+    res.json(detail);
+  } catch (err) {
+    req.log.error({ err }, "expireOption error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -661,6 +707,31 @@ router.post("/bundles/:id/purchase", requireAuth, async (req, res) => {
     if (bundle.creatorId === user.id) { res.status(400).json({ error: "Cannot purchase your own bundle" }); return; }
 
     await db.update(bundles).set({ status: "sold", buyerId: user.id, updatedAt: new Date() }).where(eq(bundles.id, id));
+
+    // Atomically transfer ownership of every component listing to the buyer
+    const items = await db.select().from(bundleItems).where(eq(bundleItems.bundleId, id));
+    const totalBundleHours = items.reduce((sum, item) => sum + item.hours, 0);
+    const perHourRate = totalBundleHours > 0 ? Math.round(bundle.totalPriceCents / totalBundleHours) : 0;
+
+    await Promise.all(
+      items.map(async (item) => {
+        await db
+          .update(timeListings)
+          .set({ buyerId: user.id, updatedAt: new Date() })
+          .where(and(eq(timeListings.id, item.listingId), eq(timeListings.status, "committed")));
+
+        // Record price signal per skill category item
+        const [listing] = await db.select().from(timeListings).where(eq(timeListings.id, item.listingId)).limit(1);
+        if (listing?.skillCategoryId && perHourRate > 0) {
+          await db.insert(priceSnapshots).values({
+            skillCategoryId: listing.skillCategoryId,
+            vwapCents: perHourRate,
+            volumeHours: item.hours,
+          });
+        }
+      }),
+    );
+
     const detail = await buildBundleDetail(id);
     res.json(detail);
   } catch (err) {

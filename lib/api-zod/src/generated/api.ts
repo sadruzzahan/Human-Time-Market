@@ -1326,7 +1326,13 @@ export const CreateOptionBody = zod.object({
   hours: zod.number().min(1),
   windowStart: zod.coerce.date(),
   windowEnd: zod.coerce.date(),
-  premiumCents: zod.number().min(1),
+  premiumCents: zod
+    .number()
+    .min(1)
+    .optional()
+    .describe(
+      "Option premium in cents. If omitted, auto-computed as 10% of (fullRateCents × hours).",
+    ),
   fullRateCents: zod.number().min(1),
   expiresAt: zod.coerce.date().nullish(),
 });
@@ -1391,6 +1397,32 @@ export const ExerciseOptionParams = zod.object({
 });
 
 export const ExerciseOptionResponse = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  professionalDisplayName: zod.string(),
+  skillCategoryId: zod.number(),
+  skillCategoryName: zod.string(),
+  hours: zod.number(),
+  windowStart: zod.coerce.date(),
+  windowEnd: zod.coerce.date(),
+  premiumCents: zod.number(),
+  fullRateCents: zod.number(),
+  holderId: zod.number().nullish(),
+  holderDisplayName: zod.string().nullish(),
+  status: zod.enum(["open", "purchased", "exercised", "expired", "cancelled"]),
+  exercisedAt: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Explicitly mark an option as expired (let it expire without exercising)
+ */
+export const ExpireOptionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ExpireOptionResponse = zod.object({
   id: zod.number(),
   professionalId: zod.number(),
   professionalDisplayName: zod.string(),
