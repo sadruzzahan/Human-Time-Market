@@ -50,6 +50,17 @@ function fmtRate(cents: number) {
   return `$${(cents / 100).toFixed(0)}/hr`;
 }
 
+function timeRemaining(endDate: string | Date): string {
+  const now = new Date();
+  const end = new Date(endDate);
+  const diffMs = end.getTime() - now.getTime();
+  if (diffMs <= 0) return "Expired";
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (days > 60) return `${Math.floor(days / 30)}mo remaining`;
+  if (days > 0) return `${days}d remaining`;
+  return "< 1d remaining";
+}
+
 function SecondaryListingCard({
   item,
   onBuy,
@@ -79,7 +90,7 @@ function SecondaryListingCard({
         </div>
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Calendar className="h-3 w-3 shrink-0" />
-          <span>{item.startDate} – {item.endDate}</span>
+          <span className="font-mono">{timeRemaining(item.endDate)}</span>
         </div>
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <User className="h-3 w-3 shrink-0" />
@@ -89,6 +100,10 @@ function SecondaryListingCard({
           <DollarSign className="h-3 w-3 shrink-0 text-primary" />
           <span className="font-mono text-primary">{fmt(item.askPriceCents)}</span>
         </div>
+      </div>
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono border-t border-border/40 pt-2">
+        <span>Orig rate: <span className="text-foreground">{fmtRate(item.originalRateCents)}</span></span>
+        <span>{item.startDate} – {item.endDate}</span>
       </div>
 
       <Button

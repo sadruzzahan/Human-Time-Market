@@ -903,11 +903,12 @@ function ProposeSwapDialog({
 }
 
 function CreateBundleDialog({
-  open, onClose, myListings, onSuccess,
+  open, onClose, myListings, buyerCommitments, onSuccess,
 }: {
   open: boolean;
   onClose: () => void;
   myListings: ListingDetail[];
+  buyerCommitments: BuyerCommitment[];
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
@@ -915,9 +916,24 @@ function CreateBundleDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [totalPriceDollars, setTotalPriceDollars] = useState("");
-  const [items, setItems] = useState([{ listingId: "", hours: "8" }]);
+  const [items, setItems] = useState([{ listingId: "", hours: "8" }, { listingId: "", hours: "8" }]);
+
+  // Eligible: own open/in_bidding listings + buyer's committed contracts
+  type EligibleItem = { id: number; title: string; tag?: string };
+  const eligibleListings: EligibleItem[] = [
+    ...myListings
+      .filter((l) => l.status === "open" || l.status === "in_bidding")
+      .map((l) => ({ id: l.id, title: l.title })),
+    ...buyerCommitments
+      .filter((l) => l.status === "committed")
+      .map((l) => ({ id: l.id, title: l.title, tag: "(contract)" })),
+  ];
 
   function addItem() {
+    if (items.length >= 5) {
+      toast({ title: "Maximum 5 items per bundle", variant: "destructive" });
+      return;
+    }
     setItems((prev) => [...prev, { listingId: "", hours: "8" }]);
   }
 
@@ -926,6 +942,10 @@ function CreateBundleDialog({
   }
 
   function removeItem(i: number) {
+    if (items.length <= 2) {
+      toast({ title: "Bundle requires at least 2 items", variant: "destructive" });
+      return;
+    }
     setItems((prev) => prev.filter((_, idx) => idx !== i));
   }
 
@@ -936,8 +956,12 @@ function CreateBundleDialog({
       return;
     }
     const validItems = items.filter((item) => item.listingId && Number(item.hours) >= 1);
-    if (validItems.length === 0) {
-      toast({ title: "Add at least one listing to the bundle", variant: "destructive" });
+    if (validItems.length < 2) {
+      toast({ title: "A bundle requires at least 2 listings", variant: "destructive" });
+      return;
+    }
+    if (validItems.length > 5) {
+      toast({ title: "A bundle can contain at most 5 listings", variant: "destructive" });
       return;
     }
     createBundle.mutate(
@@ -993,9 +1017,15 @@ function CreateBundleDialog({
                     <SelectValue placeholder="Select listing…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {myListings.map((l) => (
-                      <SelectItem key={l.id} value={String(l.id)} className="font-mono text-xs">{l.title}</SelectItem>
+                    {eligibleListings.map((l) => (
+                      <SelectItem key={l.id} value={String(l.id)} className="font-mono text-xs">
+                        {l.title}
+                        {l.tag && <span className="ml-1 text-[9px] text-muted-foreground">{l.tag}</span>}
+                      </SelectItem>
                     ))}
+                    {eligibleListings.length === 0 && (
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">No eligible listings or contracts</div>
+                    )}
                   </SelectContent>
                 </Select>
                 <Input
@@ -1173,6 +1203,7 @@ export default function Derivatives() {
         open={showCreateBundle}
         onClose={() => setShowCreateBundle(false)}
         myListings={myListings}
+        buyerCommitments={buyerCommitments}
         onSuccess={refetch}
       />
       <CreateResaleListingDialog

@@ -804,7 +804,10 @@ export interface CreateBundleBody {
   description?: string | null;
   /** @minimum 1 */
   totalPriceCents: number;
-  /** @minItems 1 */
+  /**
+   * @minItems 2
+   * @maxItems 5
+   */
   items: CreateBundleItemBody[];
 }
 

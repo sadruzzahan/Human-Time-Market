@@ -1664,6 +1664,9 @@ export const ListBundlesResponse = zod.object({
  * @summary Create a time bundle
  */
 
+export const createBundleBodyItemsMin = 2;
+export const createBundleBodyItemsMax = 5;
+
 export const CreateBundleBody = zod.object({
   title: zod.string(),
   description: zod.string().nullish(),
@@ -1675,7 +1678,8 @@ export const CreateBundleBody = zod.object({
         hours: zod.number().min(1),
       }),
     )
-    .min(1),
+    .min(createBundleBodyItemsMin)
+    .max(createBundleBodyItemsMax),
 });
 
 /**

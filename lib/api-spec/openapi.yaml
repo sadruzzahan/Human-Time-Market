@@ -3030,7 +3030,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CreateBundleItemBody"
-          minItems: 1
+          minItems: 2
+          maxItems: 5
       required:
         - title
         - totalPriceCents
