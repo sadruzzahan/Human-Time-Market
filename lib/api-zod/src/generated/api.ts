@@ -1129,6 +1129,8 @@ export const GetNotificationsResponse = zod.object({
         "contract_expiring",
         "dispute_opened",
         "dispute_resolved",
+        "listing_booked",
+        "rfp_response_received",
       ]),
       payload: zod.record(zod.string(), zod.unknown()),
       read: zod.boolean(),
@@ -1146,6 +1148,59 @@ export const MarkNotificationsReadBody = zod.object({
     .array(zod.number())
     .optional()
     .describe("Notification IDs to mark as read; omit to mark all as read"),
+});
+
+/**
+ * @summary Get current user's notification preferences (with defaults filled in)
+ */
+export const GetNotificationPreferencesResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      type: zod.enum([
+        "new_bid",
+        "bid_accepted",
+        "delivery_logged",
+        "delivery_confirmed",
+        "payment_released",
+        "contract_expiring",
+        "dispute_opened",
+        "dispute_resolved",
+        "listing_booked",
+        "rfp_response_received",
+      ]),
+      emailEnabled: zod.boolean(),
+      inAppEnabled: zod.boolean(),
+      critical: zod
+        .boolean()
+        .describe(
+          "True for non-mutable categories (security\/payments). UI must lock these toggles.",
+        ),
+    }),
+  ),
+});
+
+/**
+ * @summary Update one or more notification preferences (critical categories ignored)
+ */
+export const UpdateNotificationPreferencesBody = zod.object({
+  updates: zod.array(
+    zod.object({
+      type: zod.enum([
+        "new_bid",
+        "bid_accepted",
+        "delivery_logged",
+        "delivery_confirmed",
+        "payment_released",
+        "contract_expiring",
+        "dispute_opened",
+        "dispute_resolved",
+        "listing_booked",
+        "rfp_response_received",
+      ]),
+      emailEnabled: zod.boolean(),
+      inAppEnabled: zod.boolean(),
+    }),
+  ),
 });
 
 /**

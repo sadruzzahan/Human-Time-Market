@@ -24,8 +24,16 @@ export const notificationTypeEnum = [
   "contract_expiring",
   "dispute_opened",
   "dispute_resolved",
+  "listing_booked",
+  "rfp_response_received",
 ] as const;
 export type NotificationType = (typeof notificationTypeEnum)[number];
+
+export const NON_MUTABLE_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set([
+  "payment_released",
+  "dispute_opened",
+  "dispute_resolved",
+]);
 
 export const deliveryLogs = pgTable(
   "delivery_logs",
@@ -107,7 +115,25 @@ export const disputes = pgTable(
   }),
 );
 
+export const notificationPreferences = pgTable(
+  "notification_preferences",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type", { enum: notificationTypeEnum }).notNull(),
+    emailEnabled: boolean("email_enabled").notNull().default(true),
+    inAppEnabled: boolean("in_app_enabled").notNull().default(true),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userTypeUniq: uniqueIndex("notification_prefs_user_type_uniq").on(table.userId, table.type),
+  }),
+);
+
 export type DeliveryLog = typeof deliveryLogs.$inferSelect;
 export type DeliveryConfirmation = typeof deliveryConfirmations.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
+export type NotificationPreference = typeof notificationPreferences.$inferSelect;

@@ -465,6 +465,18 @@ router.post("/listings/:listingId/book", requireAuth, async (req, res) => {
       return { detail: await buildListingDetail(id), escrow: escrowRow };
     });
 
+    await createNotification(
+      listing.professionalId,
+      "listing_booked",
+      { listingId: id, listingTitle: listing.title, buyerId: buyer.id, buyerDisplayName: buyer.displayName },
+      {
+        emailHeading: `Your listing "${listing.title}" was booked`,
+        emailBody: `${buyer.displayName} just booked your listing. Funds are pending in escrow.`,
+        emailCtaLabel: "View dashboard",
+        emailCtaPath: "/dashboard",
+      },
+    );
+
     res.json({ listing: detail, escrow: { ...escrow, createdAt: escrow.createdAt.toISOString(), updatedAt: escrow.updatedAt.toISOString() } });
   } catch (err) {
     req.log.error({ err }, "bookListing error");
@@ -564,13 +576,23 @@ router.post("/listings/:listingId/bids", requireAuth, async (req, res) => {
       await db.update(timeListings).set({ status: "in_bidding", updatedAt: new Date() }).where(eq(timeListings.id, id));
     }
 
-    await createNotification(listing.professionalId, "new_bid", {
-      listingId: id,
-      listingTitle: listing.title,
-      bidderId: bidder.id,
-      bidderDisplayName: bidder.displayName,
-      bidRateCents: parsed.data.bidRateCents,
-    });
+    await createNotification(
+      listing.professionalId,
+      "new_bid",
+      {
+        listingId: id,
+        listingTitle: listing.title,
+        bidderId: bidder.id,
+        bidderDisplayName: bidder.displayName,
+        bidRateCents: parsed.data.bidRateCents,
+      },
+      {
+        emailHeading: `New bid on "${listing.title}"`,
+        emailBody: `${bidder.displayName} placed a bid of $${(parsed.data.bidRateCents / 100).toFixed(2)}/hr.`,
+        emailCtaLabel: "Review bid",
+        emailCtaPath: "/dashboard",
+      },
+    );
 
     res.status(201).json({
       id: bidRow.id,
@@ -659,11 +681,21 @@ router.post("/listings/:listingId/bids/:bidId/accept", requireAuth, async (req, 
       return { detail: await buildListingDetail(listingId), escrow: escrowRow };
     });
 
-    await createNotification(bid.bidderId, "bid_accepted", {
-      listingId,
-      listingTitle: listing.title,
-      bidRateCents: bid.bidRateCents,
-    });
+    await createNotification(
+      bid.bidderId,
+      "bid_accepted",
+      {
+        listingId,
+        listingTitle: listing.title,
+        bidRateCents: bid.bidRateCents,
+      },
+      {
+        emailHeading: `Your bid was accepted on "${listing.title}"`,
+        emailBody: `Congrats — your bid of $${(bid.bidRateCents / 100).toFixed(2)}/hr was accepted. Funds will be requested into escrow.`,
+        emailCtaLabel: "View commitment",
+        emailCtaPath: "/dashboard",
+      },
+    );
 
     res.json({ listing: detail, escrow: { ...escrow, createdAt: escrow.createdAt.toISOString(), updatedAt: escrow.updatedAt.toISOString() } });
   } catch (err) {

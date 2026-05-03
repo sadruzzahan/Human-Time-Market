@@ -6,25 +6,26 @@ import {
   useGetProfessionalEarnings,
   useGetProfessionalRateHealth,
   useGetBuyerCommitments,
-  useGetNotifications,
   useLogDelivery,
   useConfirmDelivery,
   useOpenDispute,
-  useMarkNotificationsRead,
+  useGetNotificationPreferences,
+  useUpdateNotificationPreferences,
   getGetProfessionalCommitmentsQueryKey,
   getGetBuyerCommitmentsQueryKey,
   getGetProfessionalCashFlowQueryKey,
   getGetProfessionalEarningsQueryKey,
   getGetProfessionalRateHealthQueryKey,
-  getGetNotificationsQueryKey,
+  getGetNotificationPreferencesQueryKey,
   type ProfessionalCommitment,
   type BuyerCommitment,
   type DeliveryLog,
   type CashFlowWeek,
   type EarningsEntry,
   type RateHealthEntry,
-  type Notification,
+  type NotificationPreference,
 } from "@workspace/api-client-react";
+import { Switch } from "@/components/ui/switch";
 import Navbar from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -94,82 +95,100 @@ function fmtTs(d: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Notification panel
+// Notification preferences panel
 // ---------------------------------------------------------------------------
 
-function notifLabel(type: Notification["type"], payload: Record<string, unknown>): string {
-  const title = String(payload.listingTitle ?? "");
-  switch (type) {
-    case "new_bid": return `New bid received on "${title}"`;
-    case "bid_accepted": return `Your bid was accepted for "${title}"`;
-    case "delivery_logged": return `Delivery logged on "${title}" — ${payload.hoursLogged}h`;
-    case "delivery_confirmed": return `Delivery confirmed on "${title}"`;
-    case "payment_released": return `Payment released for "${title}"`;
-    case "contract_expiring": return `Contract expiring soon: "${title}"`;
-    case "dispute_opened": return `Dispute opened on "${title}"`;
-    case "dispute_resolved": return `Dispute resolved on "${title}"`;
-    default: return type;
-  }
-}
+const PREF_LABELS: Record<NotificationPreference["type"], string> = {
+  new_bid: "New bid received",
+  bid_accepted: "Your bid was accepted",
+  delivery_logged: "Delivery hours logged",
+  delivery_confirmed: "Delivery confirmed by buyer",
+  payment_released: "Payment released (critical)",
+  contract_expiring: "Contract expiring soon",
+  dispute_opened: "Dispute opened (critical)",
+  dispute_resolved: "Dispute resolved (critical)",
+  listing_booked: "Your listing was booked",
+  rfp_response_received: "RFP response received",
+};
 
-function NotificationPanel({ onClose }: { onClose: () => void }) {
+function NotificationPreferencesPanel() {
   const qc = useQueryClient();
-  const { data, isLoading } = useGetNotifications();
-  const { mutate: markRead } = useMarkNotificationsRead();
+  const { toast } = useToast();
+  const { data, isLoading } = useGetNotificationPreferences();
+  const { mutate, isPending } = useUpdateNotificationPreferences();
 
-  const handleMarkAll = () => {
-    markRead({ data: { ids: [] } }, {
-      onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getGetNotificationsQueryKey() });
+  const handleToggle = (pref: NotificationPreference, channel: "email" | "inApp", value: boolean) => {
+    if (pref.critical) return;
+    mutate(
+      {
+        data: {
+          updates: [
+            {
+              type: pref.type,
+              emailEnabled: channel === "email" ? value : pref.emailEnabled,
+              inAppEnabled: channel === "inApp" ? value : pref.inAppEnabled,
+            },
+          ],
+        },
       },
-    });
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getGetNotificationPreferencesQueryKey() });
+          toast({ title: "Preference updated" });
+        },
+        onError: () => toast({ title: "Failed to update preference", variant: "destructive" }),
+      },
+    );
   };
 
-  const handleMarkOne = (id: number) => {
-    markRead({ data: { ids: [id] } }, {
-      onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getGetNotificationsQueryKey() });
-      },
-    });
-  };
+  if (isLoading) {
+    return <div className="space-y-2">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+  }
 
   return (
-    <div className="w-80 max-h-[480px] flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <span className="font-mono font-semibold text-sm">Notifications</span>
-        <Button size="sm" variant="ghost" className="text-xs h-7" onClick={handleMarkAll}>Mark all read</Button>
+    <div className="border border-border rounded-lg overflow-hidden">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2 bg-muted/40 text-xs font-mono uppercase tracking-wider text-muted-foreground">
+        <div>Category</div>
+        <div className="w-16 text-center">Email</div>
+        <div className="w-16 text-center">In-app</div>
       </div>
-      <div className="flex-1 overflow-y-auto">
-        {isLoading ? (
-          <div className="p-4 space-y-2">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+      {data?.items.map((pref) => (
+        <div
+          key={pref.type}
+          className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-3 items-center border-t border-border/50"
+          data-testid={`pref-row-${pref.type}`}
+        >
+          <div className="text-sm">
+            {PREF_LABELS[pref.type] ?? pref.type}
+            {pref.critical && (
+              <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-400">Locked</span>
+            )}
           </div>
-        ) : !data?.items.length ? (
-          <div className="p-6 text-center text-muted-foreground text-sm">No notifications yet</div>
-        ) : (
-          data.items.map((n) => (
-            <div
-              key={n.id}
-              className={`flex items-start gap-3 px-4 py-3 border-b border-border/50 ${!n.read ? "bg-primary/5" : ""}`}
-            >
-              {!n.read && <span className="mt-1 w-2 h-2 rounded-full bg-primary shrink-0" />}
-              {n.read && <span className="mt-1 w-2 h-2 shrink-0" />}
-              <div className="flex-1 min-w-0">
-                <p className="text-xs leading-snug">{notifLabel(n.type, n.payload as Record<string, unknown>)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{fmtTs(n.createdAt)}</p>
-              </div>
-              {!n.read && (
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0" onClick={() => handleMarkOne(n.id)}>
-                  <Check className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+          <div className="w-16 flex justify-center">
+            <Switch
+              checked={pref.emailEnabled}
+              disabled={pref.critical || isPending}
+              onCheckedChange={(v) => handleToggle(pref, "email", v)}
+              data-testid={`switch-email-${pref.type}`}
+            />
+          </div>
+          <div className="w-16 flex justify-center">
+            <Switch
+              checked={pref.inAppEnabled}
+              disabled={pref.critical || isPending}
+              onCheckedChange={(v) => handleToggle(pref, "inApp", v)}
+              data-testid={`switch-inapp-${pref.type}`}
+            />
+          </div>
+        </div>
+      ))}
+      <p className="px-4 py-3 text-xs text-muted-foreground border-t border-border/50">
+        Critical notifications (payments, disputes) cannot be muted.
+      </p>
     </div>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Delivery log dialog (professional logs hours)
@@ -737,14 +756,10 @@ function EarningsHistory() {
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"professional" | "buyer">("professional");
+  const [activeTab, setActiveTab] = useState<"professional" | "buyer" | "settings">("professional");
 
-  const { data: notifs } = useGetNotifications();
   const { data: proCommitments, isLoading: proLoading } = useGetProfessionalCommitments();
   const { data: buyerCommitments, isLoading: buyerLoading } = useGetBuyerCommitments();
-
-  const unread = notifs?.unreadCount ?? 0;
 
   const activeProContracts = (proCommitments ?? []).filter((c) => c.status === "committed" || c.status === "in_dispute");
   const completedProContracts = (proCommitments ?? []).filter((c) => c.status === "completed");
@@ -760,25 +775,6 @@ export default function Dashboard() {
             <h1 className="text-3xl font-mono font-bold tracking-tight">Dashboard</h1>
             <p className="text-muted-foreground mt-1">Your commitment book, earnings, and market positions</p>
           </div>
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 gap-2"
-              onClick={() => setNotifOpen(!notifOpen)}
-              data-testid="btn-notifications"
-            >
-              <Bell className="h-4 w-4" />
-              {unread > 0 && (
-                <Badge className="h-5 px-1.5 text-xs">{unread > 99 ? "99+" : unread}</Badge>
-              )}
-            </Button>
-            {notifOpen && (
-              <div className="absolute right-0 top-10 z-50 rounded-lg border border-border bg-background shadow-xl overflow-hidden">
-                <NotificationPanel onClose={() => setNotifOpen(false)} />
-              </div>
-            )}
-          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
@@ -790,6 +786,10 @@ export default function Dashboard() {
             <TabsTrigger value="buyer" className="gap-2" data-testid="tab-buyer">
               <Calendar className="h-4 w-4" />
               Buyer
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-2" data-testid="tab-settings">
+              <Bell className="h-4 w-4" />
+              Settings
             </TabsTrigger>
           </TabsList>
 
@@ -920,6 +920,20 @@ export default function Dashboard() {
                 </div>
               </section>
             )}
+          </TabsContent>
+
+          {/* ---- Settings Tab ---- */}
+          <TabsContent value="settings" className="space-y-8">
+            <section data-testid="section-notification-preferences">
+              <h2 className="font-mono text-lg font-bold mb-2 flex items-center gap-2">
+                <Bell className="h-5 w-5 text-primary" />
+                Notification Preferences
+              </h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Choose which notifications you want delivered by email and shown in-app.
+              </p>
+              <NotificationPreferencesPanel />
+            </section>
           </TabsContent>
         </Tabs>
       </main>

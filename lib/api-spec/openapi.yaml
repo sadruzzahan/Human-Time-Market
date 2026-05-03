@@ -903,6 +903,32 @@ paths:
         "204":
           description: Marked as read
 
+  /notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      tags: [dashboard]
+      summary: Get current user's notification preferences (with defaults filled in)
+      responses:
+        "200":
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+    patch:
+      operationId: updateNotificationPreferences
+      tags: [dashboard]
+      summary: Update one or more notification preferences (critical categories ignored)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationPreferencesBody"
+      responses:
+        "204":
+          description: Preferences updated
+
   /secondary-market:
     get:
       operationId: listSecondaryListings
@@ -2293,7 +2319,47 @@ components:
 
     NotificationType:
       type: string
-      enum: [new_bid, bid_accepted, delivery_logged, delivery_confirmed, payment_released, contract_expiring, dispute_opened, dispute_resolved]
+      enum: [new_bid, bid_accepted, delivery_logged, delivery_confirmed, payment_released, contract_expiring, dispute_opened, dispute_resolved, listing_booked, rfp_response_received]
+
+    NotificationPreference:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/NotificationType"
+        emailEnabled:
+          type: boolean
+        inAppEnabled:
+          type: boolean
+        critical:
+          type: boolean
+          description: True for non-mutable categories (security/payments). UI must lock these toggles.
+      required: [type, emailEnabled, inAppEnabled, critical]
+
+    NotificationPreferences:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationPreference"
+      required: [items]
+
+    UpdateNotificationPreferencesBody:
+      type: object
+      properties:
+        updates:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                $ref: "#/components/schemas/NotificationType"
+              emailEnabled:
+                type: boolean
+              inAppEnabled:
+                type: boolean
+            required: [type, emailEnabled, inAppEnabled]
+      required: [updates]
 
     DeliveryLog:
       type: object

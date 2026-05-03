@@ -11,6 +11,9 @@ import {
   deliveryConfirmations,
   notifications,
   disputes,
+  notificationPreferences,
+  notificationTypeEnum,
+  NON_MUTABLE_NOTIFICATION_TYPES,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -24,7 +27,8 @@ import {
   isNull,
   or,
 } from "drizzle-orm";
-import { LogDeliveryBody, OpenDisputeBody, MarkNotificationsReadBody } from "@workspace/api-zod";
+import { LogDeliveryBody, OpenDisputeBody, MarkNotificationsReadBody, UpdateNotificationPreferencesBody } from "@workspace/api-zod";
+import { sendEmail, renderEmailTemplate } from "../lib/email";
 
 const router = Router();
 
@@ -32,12 +36,50 @@ const router = Router();
 // Notification helpers
 // ---------------------------------------------------------------------------
 
+interface NotifyOptions {
+  emailHeading?: string;
+  emailBody?: string;
+  emailCtaLabel?: string;
+  emailCtaPath?: string;
+}
+
+async function getPreference(userId: number, type: typeof notifications.$inferInsert["type"]) {
+  const [row] = await db
+    .select()
+    .from(notificationPreferences)
+    .where(and(eq(notificationPreferences.userId, userId), eq(notificationPreferences.type, type)))
+    .limit(1);
+  return row;
+}
+
 export async function createNotification(
   userId: number,
   type: typeof notifications.$inferInsert["type"],
   payload: Record<string, unknown>,
+  emailOpts?: NotifyOptions,
 ) {
-  await db.insert(notifications).values({ userId, type, payload });
+  const isCritical = NON_MUTABLE_NOTIFICATION_TYPES.has(type);
+  const pref = isCritical ? null : await getPreference(userId, type);
+  const inAppEnabled = isCritical || pref?.inAppEnabled !== false;
+  const emailEnabled = isCritical || pref?.emailEnabled !== false;
+
+  if (inAppEnabled) {
+    await db.insert(notifications).values({ userId, type, payload });
+  }
+
+  if (emailEnabled && emailOpts?.emailHeading && emailOpts.emailBody) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const email = user?.email;
+    if (email) {
+      const { html, text } = renderEmailTemplate({
+        heading: emailOpts.emailHeading,
+        body: emailOpts.emailBody,
+        ctaLabel: emailOpts.emailCtaLabel,
+        ctaPath: emailOpts.emailCtaPath,
+      });
+      await sendEmail({ to: email, subject: emailOpts.emailHeading, html, text });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -677,6 +719,70 @@ router.get("/notifications", requireAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /notifications/read — mark notifications as read
 // ---------------------------------------------------------------------------
+
+// GET /notification-preferences — list current user's prefs (with defaults filled in)
+router.get("/notification-preferences", requireAuth, async (req, res) => {
+  const clerkId = req.clerkUserId!;
+  try {
+    const [user] = await db.select().from(users).where(eq(users.clerkId, clerkId)).limit(1);
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+    const rows = await db
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, user.id));
+    const byType = new Map(rows.map((r) => [r.type, r]));
+    const items = notificationTypeEnum.map((type) => {
+      const isCritical = NON_MUTABLE_NOTIFICATION_TYPES.has(type);
+      const pref = byType.get(type);
+      return {
+        type,
+        emailEnabled: isCritical ? true : (pref?.emailEnabled ?? true),
+        inAppEnabled: isCritical ? true : (pref?.inAppEnabled ?? true),
+        critical: isCritical,
+      };
+    });
+    res.json({ items });
+  } catch (err) {
+    req.log.error({ err }, "getNotificationPreferences error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /notification-preferences — update one or more prefs
+router.patch("/notification-preferences", requireAuth, async (req, res) => {
+  const clerkId = req.clerkUserId!;
+  const parsed = UpdateNotificationPreferencesBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
+  try {
+    const [user] = await db.select().from(users).where(eq(users.clerkId, clerkId)).limit(1);
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+    for (const update of parsed.data.updates) {
+      if (NON_MUTABLE_NOTIFICATION_TYPES.has(update.type)) {
+        continue; // silently ignore attempts to mute critical categories
+      }
+      await db
+        .insert(notificationPreferences)
+        .values({
+          userId: user.id,
+          type: update.type,
+          emailEnabled: update.emailEnabled,
+          inAppEnabled: update.inAppEnabled,
+        })
+        .onConflictDoUpdate({
+          target: [notificationPreferences.userId, notificationPreferences.type],
+          set: {
+            emailEnabled: update.emailEnabled,
+            inAppEnabled: update.inAppEnabled,
+            updatedAt: new Date(),
+          },
+        });
+    }
+    res.status(204).send();
+  } catch (err) {
+    req.log.error({ err }, "updateNotificationPreferences error");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 router.post("/notifications/read", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;

@@ -7,6 +7,7 @@ import {
   RespondToRfpBody,
   ListRfpsQueryParams,
 } from "@workspace/api-zod";
+import { createNotification } from "./dashboard";
 
 function toDateStr(d: Date | string | undefined): string | undefined {
   if (!d) return undefined;
@@ -255,6 +256,26 @@ router.post("/rfps/:rfpId/responses", requireAuth, async (req, res) => {
         .values({ rfpId: id, professionalId: professional.id, proposedRateCents: parsed.data.proposedRateCents, message: parsed.data.message })
         .returning();
       response = created;
+    }
+
+    if (existing.length === 0) {
+      await createNotification(
+        rfp.buyerId,
+        "rfp_response_received",
+        {
+          rfpId: id,
+          rfpTitle: rfp.title,
+          professionalId: professional.id,
+          professionalDisplayName: professional.displayName,
+          proposedRateCents: response.proposedRateCents,
+        },
+        {
+          emailHeading: `New response to your RFP "${rfp.title}"`,
+          emailBody: `${professional.displayName} responded with a proposed rate of $${(response.proposedRateCents / 100).toFixed(2)}/hr.`,
+          emailCtaLabel: "Review response",
+          emailCtaPath: "/dashboard",
+        },
+      );
     }
 
     res.status(201).json({

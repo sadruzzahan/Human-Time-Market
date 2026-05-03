@@ -455,7 +455,31 @@ export const NotificationType = {
   contract_expiring: "contract_expiring",
   dispute_opened: "dispute_opened",
   dispute_resolved: "dispute_resolved",
+  listing_booked: "listing_booked",
+  rfp_response_received: "rfp_response_received",
 } as const;
+
+export interface NotificationPreference {
+  type: NotificationType;
+  emailEnabled: boolean;
+  inAppEnabled: boolean;
+  /** True for non-mutable categories (security/payments). UI must lock these toggles. */
+  critical: boolean;
+}
+
+export interface NotificationPreferences {
+  items: NotificationPreference[];
+}
+
+export type UpdateNotificationPreferencesBodyUpdatesItem = {
+  type: NotificationType;
+  emailEnabled: boolean;
+  inAppEnabled: boolean;
+};
+
+export interface UpdateNotificationPreferencesBody {
+  updates: UpdateNotificationPreferencesBodyUpdatesItem[];
+}
 
 export interface DeliveryLog {
   id: number;

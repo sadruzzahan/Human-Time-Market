@@ -57,17 +57,35 @@ async function loadUserAndProfile(clerkId: string): Promise<{ user: User; profil
   return { user, profile: profile ?? null };
 }
 
+async function fetchClerkEmail(clerkId: string): Promise<string | null> {
+  try {
+    const { clerkClient } = await import("@clerk/express");
+    const cu = await clerkClient.users.getUser(clerkId);
+    const primary = cu.emailAddresses.find((e) => e.id === cu.primaryEmailAddressId);
+    return primary?.emailAddress ?? cu.emailAddresses[0]?.emailAddress ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // GET /users/me — auto-creates a minimal user row on first access so we always return 200
 router.get("/users/me", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   try {
     let found = await loadUserAndProfile(clerkId);
     if (!found) {
+      const email = await fetchClerkEmail(clerkId);
       const [newUser] = await db
         .insert(users)
-        .values({ clerkId, displayName: "" })
+        .values({ clerkId, displayName: "", email })
         .returning();
       found = { user: newUser, profile: null };
+    } else if (!found.user.email) {
+      const email = await fetchClerkEmail(clerkId);
+      if (email) {
+        const [updated] = await db.update(users).set({ email }).where(eq(users.id, found.user.id)).returning();
+        found.user = updated;
+      }
     }
     res.json(flattenProfile(found.user, found.profile));
   } catch (err) {

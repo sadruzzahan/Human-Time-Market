@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LayoutDashboard, LogOut, User as UserIcon } from "lucide-react";
+import { NotificationBell } from "@/components/notification-bell";
 
 export default function Navbar() {
   const { signOut } = useClerk();
@@ -55,6 +56,7 @@ export default function Navbar() {
             </Link>
           </Show>
           <Show when="signed-in">
+            <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full" data-testid="btn-user-menu">
