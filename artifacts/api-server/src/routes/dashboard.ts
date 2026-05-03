@@ -641,14 +641,21 @@ router.get("/notifications", requireAuth, async (req, res) => {
     const [user] = await db.select().from(users).where(eq(users.clerkId, clerkId)).limit(1);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
 
-    const items = await db
-      .select()
-      .from(notifications)
-      .where(eq(notifications.userId, user.id))
-      .orderBy(desc(notifications.createdAt))
-      .limit(50);
+    const [items, countRow] = await Promise.all([
+      db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, user.id))
+        .orderBy(desc(notifications.createdAt))
+        .limit(50),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(notifications)
+        .where(and(eq(notifications.userId, user.id), eq(notifications.read, false)))
+        .then((r) => r[0]),
+    ]);
 
-    const unreadCount = items.filter((n) => !n.read).length;
+    const unreadCount = countRow?.count ?? 0;
 
     res.json({
       items: items.map((n) => ({
