@@ -440,9 +440,17 @@ router.post("/options/:id/purchase", requireAuth, async (req, res) => {
     if (opt.status !== "open") { res.status(400).json({ error: "Option is not available for purchase" }); return; }
     if (opt.professionalId === user.id) { res.status(400).json({ error: "Cannot purchase your own option" }); return; }
 
-    await db.update(timeOptions).set({ status: "purchased", holderId: user.id, updatedAt: new Date() }).where(eq(timeOptions.id, id));
+    // Atomic single-writer: WHERE status='open' prevents concurrent buyers both succeeding
+    const [purchased] = await db
+      .update(timeOptions)
+      .set({ status: "purchased", holderId: user.id, updatedAt: new Date() })
+      .where(and(eq(timeOptions.id, id), eq(timeOptions.status, "open")))
+      .returning({ id: timeOptions.id });
+    if (!purchased) {
+      res.status(409).json({ error: "Option was purchased concurrently — please refresh" }); return;
+    }
 
-    // Record premium payment as a trade signal (premium price, not full rate)
+    // Record premium payment as a trade signal (option_exercise covers premium + full exercise signals)
     await recordDerivativeTrade(
       "option_exercise",
       opt.skillCategoryId,
@@ -468,33 +476,49 @@ router.post("/options/:id/exercise", requireAuth, async (req, res) => {
 
     const [opt] = await db.select().from(timeOptions).where(eq(timeOptions.id, id)).limit(1);
     if (!opt) { res.status(404).json({ error: "Not found" }); return; }
-    if (opt.status !== "purchased") { res.status(400).json({ error: "Option must be purchased before exercising" }); return; }
+    if (opt.status !== "purchased") { res.status(400).json({ error: "Option must be in purchased state to exercise" }); return; }
     if (opt.holderId !== user.id) { res.status(403).json({ error: "Only the option holder can exercise it" }); return; }
     if (opt.expiresAt && new Date() > opt.expiresAt) {
-      await db.update(timeOptions).set({ status: "expired", updatedAt: new Date() }).where(eq(timeOptions.id, id));
-      res.status(400).json({ error: "Option has expired" });
+      // Mark expired atomically and reject
+      await db.update(timeOptions)
+        .set({ status: "expired", updatedAt: new Date() })
+        .where(and(eq(timeOptions.id, id), eq(timeOptions.status, "purchased")));
+      res.status(400).json({ error: "Option has expired and cannot be exercised" });
       return;
     }
 
     const [skillCat] = await db.select().from(skillCategories).where(eq(skillCategories.id, opt.skillCategoryId)).limit(1);
 
-    // Exercise: mark option + create a real committed engagement
-    const [newListing] = await db.insert(timeListings).values({
-      professionalId: opt.professionalId,
-      skillCategoryId: opt.skillCategoryId,
-      title: `Option: ${skillCat?.name ?? "Time"} · ${opt.hours}h (${opt.windowStart}–${opt.windowEnd})`,
-      listingType: "fixed_rate",
-      rateCents: opt.fullRateCents,
-      hoursPerWeek: opt.hours,
-      startDate: opt.windowStart,
-      endDate: opt.windowEnd,
-      status: "committed",
-      buyerId: user.id,
-    }).returning();
+    // Atomic exercise: insert committed listing + update option status in one transaction.
+    // WHERE status='purchased' AND holder_id=user prevents concurrent double-exercise.
+    let committedListingId: number;
+    await db.transaction(async (tx) => {
+      const [newListing] = await tx.insert(timeListings).values({
+        professionalId: opt.professionalId,
+        skillCategoryId: opt.skillCategoryId,
+        title: `Option: ${skillCat?.name ?? "Time"} · ${opt.hours}h (${opt.windowStart}–${opt.windowEnd})`,
+        listingType: "fixed_rate",
+        rateCents: opt.fullRateCents,
+        hoursPerWeek: opt.hours,
+        startDate: opt.windowStart,
+        endDate: opt.windowEnd,
+        status: "committed",
+        buyerId: user.id,
+      }).returning({ id: timeListings.id });
 
-    await db.update(timeOptions)
-      .set({ status: "exercised", exercisedAt: new Date(), updatedAt: new Date() })
-      .where(eq(timeOptions.id, id));
+      const [exercised] = await tx
+        .update(timeOptions)
+        .set({ status: "exercised", exercisedAt: new Date(), updatedAt: new Date() })
+        .where(and(
+          eq(timeOptions.id, id),
+          eq(timeOptions.status, "purchased"),
+          eq(timeOptions.holderId, user.id),
+        ))
+        .returning({ id: timeOptions.id });
+      if (!exercised) throw new Error("Option was concurrently modified — exercise aborted");
+
+      committedListingId = newListing.id;
+    });
 
     // Record full-rate trade signal upon exercise
     await recordDerivativeTrade(
@@ -506,13 +530,22 @@ router.post("/options/:id/exercise", requireAuth, async (req, res) => {
     );
 
     const detail = await buildOptionDetail(id);
-    res.json({ ...detail, committedListingId: newListing.id });
+    res.json({ ...detail, committedListingId: committedListingId! });
   } catch (err) {
     req.log.error({ err }, "exerciseOption error");
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
+/**
+ * POST /options/:id/expire
+ *
+ * Strict lifecycle rules:
+ *   open     → only the creator (professionalId) may cancel it → status: cancelled
+ *   purchased → only the holder (holderId) may mark it expired, AND only after expiresAt → status: expired
+ *
+ * A professional CANNOT force-expire a purchased option — that would violate holder rights.
+ */
 router.post("/options/:id/expire", requireAuth, async (req, res) => {
   const clerkId = req.clerkUserId!;
   const id = Number(req.params.id);
@@ -522,14 +555,39 @@ router.post("/options/:id/expire", requireAuth, async (req, res) => {
 
     const [opt] = await db.select().from(timeOptions).where(eq(timeOptions.id, id)).limit(1);
     if (!opt) { res.status(404).json({ error: "Not found" }); return; }
-    if (opt.professionalId !== user.id && opt.holderId !== user.id) {
-      res.status(403).json({ error: "Forbidden" }); return;
-    }
-    if (opt.status === "exercised" || opt.status === "expired") {
+    if (opt.status === "exercised" || opt.status === "expired" || opt.status === "cancelled") {
       res.status(400).json({ error: "Option is already finalized" }); return;
     }
 
-    await db.update(timeOptions).set({ status: "expired", updatedAt: new Date() }).where(eq(timeOptions.id, id));
+    if (opt.status === "open") {
+      // Only creator may cancel an open option
+      if (opt.professionalId !== user.id) {
+        res.status(403).json({ error: "Only the option creator can cancel an open option" }); return;
+      }
+      const [cancelled] = await db
+        .update(timeOptions)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(and(eq(timeOptions.id, id), eq(timeOptions.status, "open"), eq(timeOptions.professionalId, user.id)))
+        .returning({ id: timeOptions.id });
+      if (!cancelled) { res.status(409).json({ error: "Option state changed concurrently" }); return; }
+    } else if (opt.status === "purchased") {
+      // Only holder may manually expire a purchased option, and only after expiresAt
+      if (opt.holderId !== user.id) {
+        res.status(403).json({ error: "Only the option holder can expire a purchased option — the creator cannot revoke holder rights" }); return;
+      }
+      if (!opt.expiresAt || new Date() <= opt.expiresAt) {
+        res.status(400).json({ error: "Option has not yet expired — holder may still exercise it" }); return;
+      }
+      const [expired] = await db
+        .update(timeOptions)
+        .set({ status: "expired", updatedAt: new Date() })
+        .where(and(eq(timeOptions.id, id), eq(timeOptions.status, "purchased"), eq(timeOptions.holderId, user.id)))
+        .returning({ id: timeOptions.id });
+      if (!expired) { res.status(409).json({ error: "Option state changed concurrently" }); return; }
+    } else {
+      res.status(400).json({ error: "Cannot expire option in current state" }); return;
+    }
+
     const detail = await buildOptionDetail(id);
     res.json(detail);
   } catch (err) {
