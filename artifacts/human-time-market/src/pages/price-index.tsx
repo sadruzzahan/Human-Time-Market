@@ -528,12 +528,14 @@ function PriceIndexRowContainer({
   onSelect: () => void;
   onPlaceOrder: () => void;
 }) {
+  const qc = useQueryClient();
+
   const { data: history, isLoading: historyLoading } = useGetPriceHistory(
     entry.skillCategoryId,
     {
       query: {
         queryKey: getGetPriceHistoryQueryKey(entry.skillCategoryId),
-        enabled: isSelected,
+        enabled: true,
       },
     },
   );
@@ -547,6 +549,18 @@ function PriceIndexRowContainer({
       },
     },
   );
+
+  // Per-category SSE: subscribe when row is expanded for live order book depth
+  useEffect(() => {
+    if (!isSelected) return;
+    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+    const url = `${window.location.origin}${base}/api/order-book/${entry.skillCategoryId}/events`;
+    const evtSource = new EventSource(url, { withCredentials: true });
+    evtSource.addEventListener("order-book", () => {
+      qc.invalidateQueries({ queryKey: getGetOrderBookQueryKey(entry.skillCategoryId) });
+    });
+    return () => evtSource.close();
+  }, [isSelected, entry.skillCategoryId, qc]);
 
   return (
     <PriceIndexRow
@@ -588,7 +602,7 @@ export default function PriceIndex() {
     })),
   );
 
-  // SSE connection for live price updates
+  // SSE connection for live price-index updates
   useEffect(() => {
     const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
     const url = `${window.location.origin}${base}/api/price-index/events`;
@@ -597,27 +611,12 @@ export default function PriceIndex() {
     evtSource.onopen = () => setLiveStatus("live");
     evtSource.onerror = () => setLiveStatus("offline");
 
-    evtSource.addEventListener("price_update", () => {
-      refetch();
-    });
-
-    evtSource.addEventListener("order_book_update", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.skillCategoryId) {
-          qc.invalidateQueries({
-            queryKey: [`/api/order-book/${data.skillCategoryId}`],
-          });
-        }
-      } catch {}
-    });
-
-    evtSource.addEventListener("trade", () => {
+    evtSource.addEventListener("price-index", () => {
       refetch();
     });
 
     return () => evtSource.close();
-  }, [refetch, qc]);
+  }, [refetch]);
 
   const handleRowSelect = useCallback(
     (catId: number) => {
