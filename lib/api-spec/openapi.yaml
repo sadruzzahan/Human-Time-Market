@@ -931,7 +931,7 @@ components:
 
     ListingStatus:
       type: string
-      enum: [open, in_bidding, committed, completed, cancelled]
+      enum: [open, in_bidding, committed, in_dispute, completed, cancelled]
 
     BidStatus:
       type: string

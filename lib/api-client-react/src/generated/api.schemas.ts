@@ -38,6 +38,7 @@ export const ListingStatus = {
   open: "open",
   in_bidding: "in_bidding",
   committed: "committed",
+  in_dispute: "in_dispute",
   completed: "completed",
   cancelled: "cancelled",
 } as const;

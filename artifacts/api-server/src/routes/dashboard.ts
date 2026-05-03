@@ -499,30 +499,31 @@ router.post("/listings/:listingId/deliveries/:deliveryId/confirm", requireAuth, 
       deliveryLogId: deliveryId,
     });
 
-    const [totalRow] = await db
-      .select({ total: sum(deliveryLogs.hoursLogged) })
-      .from(deliveryLogs)
+    const confirmedRows = await db
+      .select({ hoursLogged: deliveryLogs.hoursLogged })
+      .from(deliveryConfirmations)
+      .innerJoin(deliveryLogs, eq(deliveryLogs.id, deliveryConfirmations.deliveryLogId))
       .where(eq(deliveryLogs.listingId, listingId));
-    const totalDelivered = Number(totalRow?.total ?? 0);
+    const totalConfirmed = confirmedRows.reduce((s, r) => s + r.hoursLogged, 0);
     const contractHours = totalContractHours({
       hoursPerWeek: listing.hoursPerWeek,
       startDate: listing.startDate,
       endDate: listing.endDate,
     });
 
-    if (listing.status === "committed" && totalDelivered >= contractHours) {
+    if (listing.status === "committed" && totalConfirmed >= contractHours) {
       await db.update(timeListings).set({ status: "completed", updatedAt: new Date() }).where(eq(timeListings.id, listingId));
       await createNotification(listing.professionalId, "payment_released", {
         listingId,
         listingTitle: listing.title,
-        totalDelivered,
-        totalEarnedCents: totalDelivered * listing.rateCents,
+        totalDelivered: totalConfirmed,
+        totalEarnedCents: totalConfirmed * listing.rateCents,
       });
       await createNotification(user.id, "payment_released", {
         listingId,
         listingTitle: listing.title,
-        totalDelivered,
-        totalEarnedCents: totalDelivered * listing.rateCents,
+        totalDelivered: totalConfirmed,
+        totalEarnedCents: totalConfirmed * listing.rateCents,
       });
     }
 

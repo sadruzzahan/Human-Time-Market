@@ -663,9 +663,9 @@ export default function Dashboard() {
 
   const unread = notifs?.unreadCount ?? 0;
 
-  const activeProContracts = (proCommitments ?? []).filter((c) => c.status === "committed");
+  const activeProContracts = (proCommitments ?? []).filter((c) => c.status === "committed" || c.status === "in_dispute");
   const completedProContracts = (proCommitments ?? []).filter((c) => c.status === "completed");
-  const activeBuyerContracts = (buyerCommitments ?? []).filter((c) => c.status === "committed");
+  const activeBuyerContracts = (buyerCommitments ?? []).filter((c) => c.status === "committed" || c.status === "in_dispute");
   const completedBuyerContracts = (buyerCommitments ?? []).filter((c) => c.status === "completed");
 
   return (
