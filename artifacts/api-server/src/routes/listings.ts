@@ -197,7 +197,7 @@ router.get("/listings", async (req, res) => {
     const uniqueCatIds = [...new Set(rows.map((r) => r.time_listings.skillCategoryId))];
     const marketRates: Record<number, number | null> = {};
     if (uniqueCatIds.length > 0) {
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const vwapRows = await db
         .select({
           skillCategoryId: priceSnapshots.skillCategoryId,
@@ -211,7 +211,7 @@ router.get("/listings", async (req, res) => {
         .where(
           and(
             inArray(priceSnapshots.skillCategoryId, uniqueCatIds),
-            gte(priceSnapshots.snapshotAt, oneDayAgo),
+            gte(priceSnapshots.snapshotAt, thirtyDaysAgo),
           ),
         )
         .groupBy(priceSnapshots.skillCategoryId);

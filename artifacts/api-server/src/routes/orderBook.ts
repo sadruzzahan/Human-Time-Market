@@ -357,7 +357,12 @@ router.delete("/orders/:orderId", requireAuth, async (req, res) => {
     await db
       .update(orders)
       .set({ status: "cancelled", updatedAt: new Date() })
-      .where(eq(orders.id, orderId));
+      .where(
+        and(
+          eq(orders.id, orderId),
+          inArray(orders.status, ["open", "partially_filled"]),
+        ),
+      );
 
     const depth = await buildOrderBookDepth(order.skillCategoryId);
     sse.broadcastCategory(order.skillCategoryId, "order-book", depth);
