@@ -293,7 +293,31 @@ router.post("/secondary-market/:id/purchase", requireAuth, async (req, res) => {
 
     await db.transaction(async (tx) => {
       await tx.update(secondaryListings).set({ status: "sold", buyerId: user.id, soldAt: new Date() }).where(eq(secondaryListings.id, id));
-      await tx.update(timeListings).set({ buyerId: user.id, updatedAt: new Date() }).where(eq(timeListings.id, sl.originalListingId));
+
+      // Atomically verify seller still holds the commitment: WHERE buyerId = sellerId AND status = committed.
+      // If ownership transferred (bundle/swap) after this secondary listing was created the WHERE fails → 0 rows.
+      const [transferred] = await tx
+        .update(timeListings)
+        .set({ buyerId: user.id, updatedAt: new Date() })
+        .where(and(
+          eq(timeListings.id, sl.originalListingId),
+          eq(timeListings.buyerId, sl.sellerId),
+          eq(timeListings.status, "committed"),
+        ))
+        .returning({ id: timeListings.id });
+      if (!transferred) {
+        throw new Error("Seller no longer holds this commitment — it may have been transferred or cancelled");
+      }
+
+      // Invalidate any other open secondary listings for the same underlying contract (dedup safety)
+      await tx
+        .update(secondaryListings)
+        .set({ status: "cancelled" })
+        .where(and(
+          eq(secondaryListings.originalListingId, sl.originalListingId),
+          eq(secondaryListings.status, "open"),
+          sql`${secondaryListings.id} != ${id}`,
+        ));
     });
 
     if (origListing?.skillCategoryId && origListing.hoursPerWeek) {
@@ -634,24 +658,37 @@ router.post("/swaps/:id/accept", requireAuth, async (req, res) => {
         throw new Error("Counterparty's listing is already committed — cannot include in a swap");
       }
 
-      // Transfer proposer's listing to counterparty (counterparty receives proposer's services)
-      await tx
+      // Transfer proposer's listing to counterparty — verify affected row (atomic race guard)
+      const [proposerRow] = await tx
         .update(timeListings)
         .set({ buyerId: swap.counterpartyId, status: "committed", updatedAt: new Date() })
         .where(and(
           eq(timeListings.id, swap.proposerListingId),
           eq(timeListings.professionalId, swap.proposerId),
           or(eq(timeListings.status, "open"), eq(timeListings.status, "in_bidding")),
-        ));
+        ))
+        .returning({ id: timeListings.id });
+      if (!proposerRow) throw new Error("Proposer listing was concurrently modified — swap cannot complete");
 
-      // Transfer counterparty's listing to proposer (proposer receives counterparty's services)
-      await tx
+      // Transfer counterparty's listing to proposer — verify affected row (atomic race guard)
+      const [cpRow] = await tx
         .update(timeListings)
         .set({ buyerId: swap.proposerId, status: "committed", updatedAt: new Date() })
         .where(and(
           eq(timeListings.id, counterpartyListingId),
           eq(timeListings.professionalId, swap.counterpartyId),
           or(eq(timeListings.status, "open"), eq(timeListings.status, "in_bidding")),
+        ))
+        .returning({ id: timeListings.id });
+      if (!cpRow) throw new Error("Counterparty listing was concurrently modified — swap cannot complete");
+
+      // Cancel any open secondary listings for both transferred listings (cross-instrument exclusivity)
+      await tx
+        .update(secondaryListings)
+        .set({ status: "cancelled" })
+        .where(and(
+          inArray(secondaryListings.originalListingId, [swap.proposerListingId, counterpartyListingId]),
+          eq(secondaryListings.status, "open"),
         ));
 
       await tx
@@ -852,15 +889,36 @@ router.post("/bundles/:id/purchase", requireAuth, async (req, res) => {
 
         if (isCreatorProfessional) {
           // Professional bundles their own open service → becomes committed for new buyer
-          await tx.update(timeListings)
+          const [row] = await tx.update(timeListings)
             .set({ buyerId: user.id, status: "committed", updatedAt: new Date() })
-            .where(and(eq(timeListings.id, item.listingId), eq(timeListings.professionalId, bundle.creatorId)));
+            .where(and(
+              eq(timeListings.id, item.listingId),
+              eq(timeListings.professionalId, bundle.creatorId),
+              or(eq(timeListings.status, "open"), eq(timeListings.status, "in_bidding")),
+            ))
+            .returning({ id: timeListings.id });
+          if (!row) throw new Error(`Listing ${item.listingId} is no longer available — concurrent ownership change detected`);
         } else {
           // Buyer resells their committed contract → transfer buyerId
-          await tx.update(timeListings)
+          const [row] = await tx.update(timeListings)
             .set({ buyerId: user.id, updatedAt: new Date() })
-            .where(and(eq(timeListings.id, item.listingId), eq(timeListings.buyerId, bundle.creatorId), eq(timeListings.status, "committed")));
+            .where(and(
+              eq(timeListings.id, item.listingId),
+              eq(timeListings.buyerId, bundle.creatorId),
+              eq(timeListings.status, "committed"),
+            ))
+            .returning({ id: timeListings.id });
+          if (!row) throw new Error(`Listing ${item.listingId} is no longer owned by seller — concurrent transfer detected`);
         }
+
+        // Cancel any open secondary listings for this listing — ownership is changing
+        await tx
+          .update(secondaryListings)
+          .set({ status: "cancelled" })
+          .where(and(
+            eq(secondaryListings.originalListingId, item.listingId),
+            eq(secondaryListings.status, "open"),
+          ));
       }
     });
 
