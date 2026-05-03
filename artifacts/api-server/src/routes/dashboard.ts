@@ -115,10 +115,13 @@ router.get("/dashboard/professional/commitments", requireAuth, async (req, res) 
       .where(
         and(
           eq(timeListings.professionalId, user.id),
-          inArray(timeListings.status, ["committed", "completed"]),
+          inArray(timeListings.status, ["committed", "in_dispute", "completed"]),
         ),
       )
       .orderBy(desc(timeListings.updatedAt));
+
+    const now = new Date();
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
 
     const result = await Promise.all(
       listings.map(async ({ time_listings: l, skill_categories: cat }) => {
@@ -130,6 +133,31 @@ router.get("/dashboard/professional/commitments", requireAuth, async (req, res) 
         const total = totalContractHours({ hoursPerWeek: l.hoursPerWeek, startDate: l.startDate, endDate: l.endDate });
         const [escrow] = await db.select().from(escrowRecords).where(eq(escrowRecords.listingId, l.id)).limit(1);
         const dispute = await buildDispute(l.id);
+
+        if (l.status === "committed") {
+          const endMs = new Date(l.endDate).getTime();
+          if (endMs - now.getTime() <= sevenDays && endMs > now.getTime()) {
+            const existing = await db
+              .select()
+              .from(notifications)
+              .where(
+                and(
+                  eq(notifications.userId, user.id),
+                  eq(notifications.type, "contract_expiring"),
+                  sql`${notifications.payload}->>'listingId' = ${String(l.id)}`,
+                ),
+              )
+              .limit(1);
+            if (existing.length === 0) {
+              await createNotification(user.id, "contract_expiring", {
+                listingId: l.id,
+                listingTitle: l.title,
+                endDate: l.endDate,
+              });
+            }
+          }
+        }
+
         return {
           id: l.id,
           title: l.title,
@@ -343,7 +371,7 @@ router.get("/dashboard/buyer/commitments", requireAuth, async (req, res) => {
       .where(
         and(
           eq(timeListings.buyerId, user.id),
-          inArray(timeListings.status, ["committed", "completed"]),
+          inArray(timeListings.status, ["committed", "in_dispute", "completed"]),
         ),
       )
       .orderBy(desc(timeListings.updatedAt));
@@ -471,6 +499,33 @@ router.post("/listings/:listingId/deliveries/:deliveryId/confirm", requireAuth, 
       deliveryLogId: deliveryId,
     });
 
+    const [totalRow] = await db
+      .select({ total: sum(deliveryLogs.hoursLogged) })
+      .from(deliveryLogs)
+      .where(eq(deliveryLogs.listingId, listingId));
+    const totalDelivered = Number(totalRow?.total ?? 0);
+    const contractHours = totalContractHours({
+      hoursPerWeek: listing.hoursPerWeek,
+      startDate: listing.startDate,
+      endDate: listing.endDate,
+    });
+
+    if (listing.status === "committed" && totalDelivered >= contractHours) {
+      await db.update(timeListings).set({ status: "completed", updatedAt: new Date() }).where(eq(timeListings.id, listingId));
+      await createNotification(listing.professionalId, "payment_released", {
+        listingId,
+        listingTitle: listing.title,
+        totalDelivered,
+        totalEarnedCents: totalDelivered * listing.rateCents,
+      });
+      await createNotification(user.id, "payment_released", {
+        listingId,
+        listingTitle: listing.title,
+        totalDelivered,
+        totalEarnedCents: totalDelivered * listing.rateCents,
+      });
+    }
+
     res.json({
       id: log.id,
       listingId: log.listingId,
@@ -520,7 +575,7 @@ router.post("/listings/:listingId/dispute", requireAuth, async (req, res) => {
       .values({ listingId, initiatorId: user.id, reason: parsed.data.reason })
       .returning();
 
-    await db.update(timeListings).set({ status: "committed", updatedAt: new Date() }).where(eq(timeListings.id, listingId));
+    await db.update(timeListings).set({ status: "in_dispute", updatedAt: new Date() }).where(eq(timeListings.id, listingId));
 
     const otherPartyId = listing.professionalId === user.id ? listing.buyerId : listing.professionalId;
     if (otherPartyId) {

@@ -16,7 +16,7 @@ import { skillCategories } from "./skillCategories";
 export const listingTypeEnum = ["fixed_rate", "auction", "emergency"] as const;
 export type ListingType = (typeof listingTypeEnum)[number];
 
-export const listingStatusEnum = ["open", "in_bidding", "committed", "completed", "cancelled"] as const;
+export const listingStatusEnum = ["open", "in_bidding", "committed", "in_dispute", "completed", "cancelled"] as const;
 export type ListingStatus = (typeof listingStatusEnum)[number];
 
 export const bidStatusEnum = ["pending", "accepted", "rejected", "withdrawn"] as const;

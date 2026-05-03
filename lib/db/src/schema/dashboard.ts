@@ -7,6 +7,7 @@ import {
   jsonb,
   timestamp,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { timeListings } from "./marketplace";
@@ -60,7 +61,7 @@ export const deliveryConfirmations = pgTable(
     disputed: boolean("disputed").notNull().default(false),
   },
   (table) => ({
-    deliveryLogIdx: index("delivery_confirmations_log_idx").on(table.deliveryLogId),
+    deliveryLogUniq: uniqueIndex("delivery_confirmations_log_uniq").on(table.deliveryLogId),
     buyerIdx: index("delivery_confirmations_buyer_idx").on(table.buyerId),
   }),
 );
