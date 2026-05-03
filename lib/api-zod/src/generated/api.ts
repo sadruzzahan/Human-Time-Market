@@ -251,6 +251,12 @@ export const GetListingResponse = zod.object({
   endDate: zod.coerce.date(),
   listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
   rateCents: zod.number(),
+  marketRateCents: zod
+    .number()
+    .nullable()
+    .describe(
+      "VWAP market rate for this skill category from the order book (null if no trades)",
+    ),
   status: zod.enum([
     "open",
     "in_bidding",
@@ -329,6 +335,12 @@ export const UpdateListingResponse = zod.object({
   endDate: zod.coerce.date(),
   listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
   rateCents: zod.number(),
+  marketRateCents: zod
+    .number()
+    .nullable()
+    .describe(
+      "VWAP market rate for this skill category from the order book (null if no trades)",
+    ),
   status: zod.enum([
     "open",
     "in_bidding",
@@ -406,6 +418,12 @@ export const BookListingResponse = zod.object({
     endDate: zod.coerce.date(),
     listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
     rateCents: zod.number(),
+    marketRateCents: zod
+      .number()
+      .nullable()
+      .describe(
+        "VWAP market rate for this skill category from the order book (null if no trades)",
+      ),
     status: zod.enum([
       "open",
       "in_bidding",
@@ -519,6 +537,12 @@ export const AcceptBidResponse = zod.object({
     endDate: zod.coerce.date(),
     listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
     rateCents: zod.number(),
+    marketRateCents: zod
+      .number()
+      .nullable()
+      .describe(
+        "VWAP market rate for this skill category from the order book (null if no trades)",
+      ),
     status: zod.enum([
       "open",
       "in_bidding",
@@ -594,6 +618,12 @@ export const GetMyListingsResponseItem = zod.object({
   endDate: zod.coerce.date(),
   listingType: zod.enum(["fixed_rate", "auction", "emergency"]),
   rateCents: zod.number(),
+  marketRateCents: zod
+    .number()
+    .nullable()
+    .describe(
+      "VWAP market rate for this skill category from the order book (null if no trades)",
+    ),
   status: zod.enum([
     "open",
     "in_bidding",

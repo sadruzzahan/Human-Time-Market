@@ -40,6 +40,26 @@ async function buildListingDetail(listingId: number) {
 
   const [escrow] = await db.select().from(escrowRecords).where(eq(escrowRecords.listingId, listingId)).limit(1);
 
+  // Fetch market rate (VWAP) from price_snapshots for this skill category
+  let marketRateCents: number | null = null;
+  const [vwap] = await db
+    .select({
+      vwapCents: sql<number>`
+        sum(cast(${priceSnapshots.vwapCents} as bigint) * cast(${priceSnapshots.volumeHours} as bigint))::float
+        / nullif(sum(cast(${priceSnapshots.volumeHours} as bigint)), 0)
+      `,
+    })
+    .from(priceSnapshots)
+    .where(
+      and(
+        eq(priceSnapshots.skillCategoryId, listing.skillCategoryId),
+        gte(priceSnapshots.snapshotAt, sql`now() - interval '30 days'`),
+      ),
+    );
+  if (vwap?.vwapCents != null) {
+    marketRateCents = Math.round(Number(vwap.vwapCents));
+  }
+
   return {
     id: listing.id,
     title: listing.title,
@@ -52,6 +72,7 @@ async function buildListingDetail(listingId: number) {
     endDate: listing.endDate,
     listingType: listing.listingType,
     rateCents: listing.rateCents,
+    marketRateCents,
     status: listing.status,
     professionalId: listing.professionalId,
     professionalClerkId: professional?.clerkId ?? "",

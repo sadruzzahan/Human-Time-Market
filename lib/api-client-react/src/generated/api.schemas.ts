@@ -208,6 +208,11 @@ export interface ListingDetail {
   endDate: string;
   listingType: ListingType;
   rateCents: number;
+  /**
+   * VWAP market rate for this skill category from the order book (null if no trades)
+   * @nullable
+   */
+  marketRateCents: number | null;
   status: ListingStatus;
   professionalId: number;
   professionalClerkId: string;

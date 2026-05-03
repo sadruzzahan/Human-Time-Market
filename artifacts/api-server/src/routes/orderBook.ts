@@ -67,7 +67,8 @@ async function runMatchingEngine(
     .orderBy(
       orderType === "bid" ? asc(orders.rateCents) : desc(orders.rateCents),
       asc(orders.createdAt),
-    );
+    )
+    .for("update"); // row-lock resting orders to prevent concurrent overfill
 
   let totalTradedHours = 0;
 

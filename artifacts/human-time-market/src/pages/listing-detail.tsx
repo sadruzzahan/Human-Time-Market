@@ -292,13 +292,29 @@ export default function ListingDetail() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-card border border-border rounded-sm p-3">
                 <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
                   <DollarSign className="h-3.5 w-3.5" />
                   <span className="text-[10px] font-mono uppercase">Asking Rate</span>
                 </div>
                 <p className="font-mono font-bold text-primary text-lg">${(listing.rateCents / 100).toLocaleString()}/hr</p>
+              </div>
+              <div className="bg-card border border-border rounded-sm p-3">
+                <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                  <DollarSign className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-mono uppercase">Market Rate</span>
+                </div>
+                {listing.marketRateCents != null ? (
+                  <div>
+                    <p className={`font-mono font-bold text-lg ${listing.rateCents > listing.marketRateCents ? "text-red-400" : listing.rateCents < listing.marketRateCents ? "text-green-400" : "text-foreground"}`}>
+                      ${(listing.marketRateCents / 100).toLocaleString()}/hr
+                    </p>
+                    <p className="text-[9px] font-mono text-muted-foreground">VWAP (30d)</p>
+                  </div>
+                ) : (
+                  <p className="font-mono text-sm text-muted-foreground">— no trades</p>
+                )}
               </div>
               <div className="bg-card border border-border rounded-sm p-3">
                 <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
